@@ -1,0 +1,43 @@
+# Raw and processed data are tracked by documentation, not by git.
+# DHS data in particular carries redistribution restrictions under the
+# DHS Program's data use agreement, so the actual files must never be
+# committed to a public repository.
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+*.egg-info/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Credentials, in case a .env is ever added for API keys
+# (Copernicus CDS, NASA Earthdata, DHS Program downloads)
+.env
+*.key
+
+# Large generated artifacts that should be rebuilt from code, not stored
+*.pkl
+*.joblib
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.toc

@@ -1,0 +1,210 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.2cm]{geometry}
+
+\usepackage{amsmath,booktabs,array,longtable,enumitem,xcolor,url}
+\PassOptionsToPackage{hyphens}{url}
+\usepackage{xurl}
+\usepackage[hidelinks]{hyperref}
+\usepackage[numbers,sort&compress]{natbib}
+\setcitestyle{numbers,square,comma}
+\setlist{nosep,leftmargin=1.4em}
+\renewcommand{\arraystretch}{1.15}
+\newcommand{\V}{\textbf{[V]}}   % verified from a cited source
+\newcommand{\Pl}{\textbf{[P]}}   % planned rule, fixed before seeing data
+\newcommand{\Q}{\textbf{[?]}}   % pending: needs the real DHS file
+\title{\vspace{-1em}Phase 1 Strategy Report: Preprocessing and Feature Engineering\\[2pt]
+\large Climate and Demographic Informed Malaria Risk Prediction in Rwanda}
+\author{Denys Ntwaritaganzwa \\ MS EAI, Carnegie Mellon University Africa \\
+04-652 AI System Design \quad Instructor: Prof. Hatem Haddad \\ \quad \href{https://github.com/dntwaritag/malaria-risk-prediction-rwanda}{\textcolor{blue}{\underline{GitHub Link}}}}
+\date{October 14, 2026}
+\begin{document}
+\maketitle
+
+\section*{Evidence Status and Honest Scope}
+This report is a pre implementation plan. At the time of writing the DHS microdata request has not been approved, so \emph{no empirical statistic computed from the data appears below}. Every claim carries one of three tags:
+\begin{itemize}
+\item \V\ Verified from a cited public source.
+\item \Pl\ Planned: a rule or threshold fixed now, before any data is seen, so that it cannot be tuned to results.
+\item \Q\ Pending: a number that will be produced by \texttt{src/audit.py} on the real file and reported in the Phase 2 Decision Log.
+\end{itemize}
+Variable names other than the six confirmed in the DHS Guide to Statistics (\texttt{hml35}, \texttt{hml32}, \texttt{hv042}, \texttt{hv103}, \texttt{hc1}, \texttt{hv005}) are candidates and must be checked against the codebook shipped with the download.
+
+\section{Problem, Data and Scope Decision}
+\textbf{Objective.} Predict whether a child tested for malaria has a positive rapid diagnostic test (RDT), using household, demographic and residence covariates, to support targeted allocation of bed nets and indoor spraying (SDG 3, target 3.3). Malaria remains a public health burden in Rwanda despite large reductions in transmission \cite{mohrwanda2019,who2024}, with incidence among children under five still fluctuating from year to year \cite{rbc2024}.
+
+\textbf{Scope change from the proposal.} The proposal described a three class district month early warning task from Rwanda Biomedical Centre (RBC) surveillance data \cite{rbc2024}, extending machine learning work on climate driven outbreaks \cite{martineau2022,khan2024,nkiruka2021}. That series requires a formal clearance whose timeline exceeds this assignment, so the operational dataset is the DHS Program individual level malaria testing data for Rwanda. Country, disease and SDG framing are unchanged. The task type changes from three class ordinal to \textbf{binary classification}, because the survey records only a positive or negative test per child.
+
+\textbf{Source and file.} Rwanda DHS Program microdata, Person Recode (PR) file, plus Household Recode (HR) for household level covariates \Pl. The PR file holds the RDT result \texttt{hml35} and microscopy result \texttt{hml32} for tested members \V~\cite{dhsguide}. Primary target: \texttt{hml35} recoded to $1$ positive, $0$ negative.
+
+\textbf{Survey choice is a flagged decision.} The choice changes the problem materially:
+\begin{center}\small
+\begin{tabular}{@{}p{3.6cm}p{4.4cm}p{6cm}@{}}\toprule
+Survey & Reported malaria prevalence & Consequence\\\midrule
+DHS 2019--20 & about 1.79\% of 10,443 tested children \V~\cite{dhs2019} & Extreme imbalance; few positives\\
+MIS 2017 & 14.0\% of 8,209 children aged 6 months to 14 years, 170 clusters \V~\cite{habyarimana2020} & Moderate imbalance; more signal\\
+MIS 2023 & Not verified \Q & Check eligibility and prevalence on receipt\\\bottomrule
+\end{tabular}\end{center}
+The default plan is the most recent survey granted; all rules below are written to hold for either regime, and the split rule in Section 5 adapts to the number of positives.
+
+\textbf{Dimensions.} $N$ = number of PR rows after restricting to eligible, de facto members selected for testing (\texttt{hv103}=1, \texttt{hv042}=1, age in survey eligibility range) \Q. $P$ = columns retained after removing identifiers, leakage and irrelevant fields \Q. Both are written by \texttt{src/audit.py}.
+
+\section{Dataset and Problem Audit}
+\subsection{Variable inventory plan}
+Types are assigned from the codebook, not guessed from dtype, because DHS stores categorical codes as integers.
+\begin{center}\small
+\begin{tabular}{@{}p{2.6cm}p{5.2cm}p{6.5cm}@{}}\toprule
+Type & Expected examples (candidates) & Treatment\\\midrule
+Continuous & child age in months, altitude, distance or cluster level climate values & Winsorize, impute, scale\\
+Discrete & household size, number of under 5 children, rooms for sleeping & Treat as numeric, check skew\\
+Nominal & region, residence type, water source, floor material & Rare grouping, one hot\\
+Ordinal & wealth quintile, mother's education level & Explicit order, ordinal code\\
+Datetime or text & interview month and year; no free text expected & Derive season; drop raw date\\
+Identifiers & cluster, household, line number & Used for grouping only, never as features\\\bottomrule
+\end{tabular}\end{center}
+Counts per type \Q.
+
+\subsection{Baseline missingness metrics}
+\texttt{src/audit.py} will report, before any processing: missing count and percent per column; overall percent of missing cells in the $N\times P$ matrix; and complete rows versus rows with at least one missing value \Q. DHS sentinel codes (for example 9 for missing, 6 for inconclusive; to be confirmed per variable) are recoded to NaN \emph{first}, otherwise the audit undercounts missingness and imputers would average sentinel integers into real values \Pl.
+
+\subsection{Target specification}
+\textbf{Task:} binary classification, $Y=1$ if \texttt{hml35} is positive. Rows with a missing or indeterminate test are excluded from supervised training and counted separately; a test result is never imputed \Pl. Imbalance ratio $=$ negatives/positives \Q. Published prevalence implies roughly 56:1 for DHS 2019--20 and about 6:1 for MIS 2017 (derived from the cited rates, not measured).
+
+\textbf{Mitigation} \Pl: (i) class weights in the loss as the default, because they change no data and cannot leak; (ii) resampling such as SMOTE only inside training folds and only if class weights underperform on PR AUC; (iii) threshold chosen on validation data, not fixed at 0.5; (iv) metrics: PR AUC, recall at fixed precision, and ROC AUC, never accuracy alone.
+
+\textbf{Feature admissibility (leakage rule)} \Pl. A feature is admitted only if it is known before or independent of the test. Excluded by design: the other test result (\texttt{hml32} when predicting \texttt{hml35}), hemoglobin or anemia status measured in the same visit, and treatment or fever care variables that follow diagnosis.
+
+\section{Cleaning and Imputation Strategy}
+\subsection{Missingness mechanism diagnosis}
+Mechanisms are hypotheses to test, never conclusions from a plot. Protocol \Pl:
+\begin{enumerate}
+\item Separate \emph{missing by design} (child not in the testing subsample, \texttt{hv042}=0; module not asked) from item nonresponse. Design missingness is structural and is handled by eligibility filtering, not imputation.
+\item For each column with more than 1\% missing, create an indicator $M_j$ and fit a logistic regression $M_j\sim$ other observed covariates. Significant predictors after Benjamini--Hochberg correction support \textbf{MAR}; none supports MCAR.
+\item Little's MCAR test on the numeric block as a global check; a non rejection is evidence of consistency with MCAR, not proof.
+\item \textbf{MNAR} cannot be established from observed data. It is assigned on domain reasoning (for example wealth or income items skipped because of their value) and handled by keeping $M_j$ as a feature plus a sensitivity analysis comparing results with and without imputation.
+\end{enumerate}
+Expected classification (hypothesis, to be tested) \Q: sentinel coded test outcomes are design or process driven rather than random; household asset items are most likely MAR on residence and wealth.
+
+\subsection{Imputation decision rules}
+All imputers are fit on training data only \Pl.
+\begin{center}\small
+\begin{tabular}{@{}p{4.6cm}p{9.7cm}@{}}\toprule
+Condition & Method\\\midrule
+Target $Y$ & Never imputed\\
+Continuous, $|\text{skew}|<0.5$ & Mean\\
+Continuous, $|\text{skew}|\ge0.5$ & Median (mean is pulled by tails)\\
+Categorical, nominal or ordinal & Mode, plus an explicit ``Missing'' level if missingness is informative (MNAR suspected)\\
+Several correlated numeric columns, MAR, missing $>5$\% & Compare KNN (k=5) and iterative imputation against median by artificially masking 10\% of known training values and comparing RMSE; adopt the more complex method only if it wins by a clear margin\\
+Column missing $>60$\% & Drop the column unless it is a key predictor, with the decision logged\\\bottomrule
+\end{tabular}\end{center}
+Skewness values for each column \Q.
+
+\subsection{Outlier rules}
+Reproducible rules, chosen by distribution shape, with bounds learned on training data only \Pl:
+\begin{itemize}
+\item \textbf{Skewed features:} IQR rule, flag values outside $[Q_1-1.5\,\mathrm{IQR},\;Q_3+1.5\,\mathrm{IQR}]$.
+\item \textbf{Approximately normal features:} Z score rule, flag $|Z|>3$.
+\item Shape decision: $|\text{skew}|<0.5$ with excess kurtosis near 0 and a straight Q--Q plot gives Z score; otherwise IQR.
+\item Values that are impossible rather than extreme (negative counts, sentinel codes) are errors, recoded to NaN and imputed, not winsorized.
+\end{itemize}
+\textbf{Treatment: winsorize (cap), do not delete rows.} Deleting rows lowers $N$ and, with few positives, can remove the very cases the model needs; a row with one extreme value still carries valid signal in its other features; and deletion based on feature values may bias the sample. In a survey, extreme household sizes or altitudes are often real, so capping limits leverage without discarding them. Implemented as \texttt{IQRWinsorizer} and \texttt{ZScoreWinsorizer} in \texttt{src/transformers.py}.
+
+\section{Association, Collinearity and Encoding}
+\subsection{Feature to target test matrix \Pl}
+\begin{center}\small
+\begin{tabular}{@{}p{3.4cm}p{3.4cm}p{7.5cm}@{}}\toprule
+Feature type & Test & Reason\\\midrule
+Continuous, approx. normal & Point biserial $r$ & Linear association with a binary target\\
+Continuous, skewed & Mann--Whitney U, Spearman $\rho$ & Rank based, robust to skew and outliers\\
+Discrete & Spearman $\rho$ & Monotone relation, ties handled\\
+Nominal & Chi square, Cram\'er's $V$ & Association strength independent of sample size\\
+Ordinal & Spearman $\rho$ or Cochran--Armitage trend & Respects the order\\
+Any (nonlinear) & Mutual information & Captures non monotone dependence\\\bottomrule
+\end{tabular}\end{center}
+$p$ values across many tests are corrected with Benjamini--Hochberg FDR. Because survey data are clustered, naive $p$ values are optimistic; rankings are used for screening, not for inference, and are computed on the training split only.
+
+\subsection{Multicollinearity protocol \Pl}
+(1) Compute pairwise Pearson (numeric) or Cram\'er's $V$ (categorical); flag $|r|\ge0.85$. Of each flagged pair keep the feature with the stronger association to $Y$ in the training set; if tied, keep the one with less missingness, then the more interpretable. (2) On the surviving numeric block compute VIF; while the maximum VIF exceeds 10, drop that feature and recompute. (3) All of this is learned inside the pipeline on training data (\texttt{CollinearityScreen}); the dropped list is logged. Tree models tolerate collinearity, so the screen is applied for the linear and distance based models and kept as a documented option for trees.
+
+\subsection{Encoding by cardinality \Pl}
+\begin{itemize}
+\item \textbf{Ordinal} (wealth quintile, education): \texttt{OrdinalEncoder} with an explicit hand written category order, never the alphabetical default, which would invent a false rank.
+\item Example mapping (to confirm against the codebook) \Pl: wealth quintile \{poorest, poorer, middle, richer, richest\} $\rightarrow$ $\{0,1,2,3,4\}$; education \{none, primary, secondary, higher\} $\rightarrow$ $\{0,1,2,3\}$. This keeps rank without adding columns, so tree and distance models see that richest $>$ poorest.
+\item \textbf{Nominal, low cardinality} ($\le 10$ levels): one hot encoding, \texttt{handle\_unknown="ignore"}.
+\item \textbf{Rare levels:} levels under 1\% of training rows are merged into ``Other'' (\texttt{RareCategoryGrouper}); the threshold is revisited against the real frequency table.
+\item \textbf{High cardinality} (district, if used): target encoding only inside cross validation folds with smoothing; otherwise grouped into larger units.
+\item Binary indicators stay 0/1; missingness flags are kept where MNAR is suspected.
+\end{itemize}
+
+\subsection{Scaling and transformation \Pl}
+\begin{itemize}
+\item \textbf{StandardScaler} for approximately Gaussian continuous features; the primary choice because the candidate models (logistic regression with L1 or L2 penalty, SVM, KNN) and PCA are scale sensitive.
+\item \textbf{log1p then StandardScaler} for right skewed non negative features such as counts and distances.
+\item \textbf{MinMaxScaler} only for bounded features or if a neural network is trained; it is outlier sensitive, so it is applied after winsorizing.
+\item Tree based models receive unscaled but winsorized data; scaling does not change their splits.
+\item \textbf{PCA} on the scaled numeric block only, with components retained at 90\% and 95\% cumulative variance; used for diagnostics and as an optional model input, not as a replacement for interpretable features.
+\end{itemize}
+
+\section{Split Strategy and Leakage Prevention}
+\subsection{Grouping and stratification}
+DHS is a two stage cluster sample: children share households and households share clusters (primary sampling units, \texttt{hv001}). Children from one cluster have correlated malaria status through shared mosquito exposure, so a random row split would let near duplicate information appear in both train and test and inflate scores. Therefore \Pl:
+\begin{itemize}
+\item Hold out a test set by \emph{cluster} using \texttt{GroupShuffleSplit}; no cluster appears in more than one partition.
+\item Inside the training set use \texttt{StratifiedGroupKFold} (5 folds) for tuning, preserving both the class ratio and cluster integrity.
+\item Seed 42 everywhere; library versions pinned in \texttt{requirements.txt}.
+\end{itemize}
+\textbf{Ratio.} Default 80/20 train/test with 5 fold grouped CV inside the training part, which doubles as validation, rather than a fixed 70/15/15 that would starve a rare class. \textbf{Adaptive rule:} the test set must contain at least about 50 positives \Pl. With $N_+$ total positives this requires a test fraction of at least $50/N_+$. If $N_+$ is below roughly 250 (plausible for DHS 2019--20, where 1.79\% of 10,443 is about 187 \V\ derived), the 80/20 split cannot satisfy the rule, so I will use nested grouped cross validation and report fold level results with confidence intervals instead of one noisy test score. Actual $N_+$ \Q.
+
+\textbf{Temporal.} A single cross sectional survey has no forward time axis, so \texttt{TimeSeriesSplit} is not applicable. If two survey years are combined, I will train on the earlier and test on the later year as a stress test of generalization.
+
+\subsection{Survey weights}
+\texttt{hv005} (divided by $10^6$) is the design weight. Models are trained unweighted by default with class weights for imbalance; weights are used when reporting national prevalence style statistics, and weighted metrics are reported as a robustness check \Pl.
+
+\subsection{Architecture that prevents leakage}
+\begin{enumerate}
+\item Split first, preprocess second. The raw table is partitioned by cluster before any statistic is computed.
+\item One \texttt{Pipeline}: sentinel recoder $\rightarrow$ \texttt{ColumnTransformer} (winsorize, impute, encode, scale per column group) $\rightarrow$ collinearity screen $\rightarrow$ estimator.
+\item \texttt{.fit()} is called only on training data (or on one training fold inside CV); validation and test data receive \texttt{.transform()} only. Every learned quantity (quantile bounds, means, medians, category lists, VIF drops, target encodings) is therefore training only.
+\item Because the whole pipeline is passed to cross validation, all steps are refit inside each fold.
+\item Feature admissibility rule (Section 2.3) blocks target leakage by construction; the identifier columns are used only as groups.
+\item Exploratory plots and association ranking use the training split only. The test set is touched once, at the end.
+\end{enumerate}
+
+\section{Risk Register}
+\begin{center}\small
+\begin{tabular}{@{}p{4.1cm}p{4.3cm}p{5.9cm}@{}}\toprule
+Risk & Impact & Mitigation\\\midrule
+Data request delayed & Phase 2 blocked & Pipeline and audit already written and tested on synthetic data; run the moment data arrives\\
+Too few positives & Unstable test metrics & Adaptive split rule, nested grouped CV, intervals\\
+Wrong sentinel codes & Silent corruption & Verify against codebook before use; unit test\\
+Cluster correlation & Optimistic scores & Group split, report grouped CV\\
+Weak predictors & Low discrimination & Report honestly; add cluster level climate covariates (rainfall \cite{funk2015}, humidity \cite{munozsabater2021}, vegetation \cite{didan2020}) if time allows\\
+Data use agreement & Policy breach & Raw and processed data git ignored; only aggregates committed\\\bottomrule
+\end{tabular}\end{center}
+
+\section{Planned Decision Log (to be completed in Phase 2)}
+\begin{center}\small
+\begin{tabular}{@{}p{4cm}p{5.2cm}p{5cm}@{}}\toprule
+Decision & Planned in Phase 1 & Actual in Phase 2\\\midrule
+Survey used & Latest granted & \Q\\
+Sentinel codes & 9 and 6, to verify & \Q\\
+Imputation per column & Skew rule, Section 3.2 & \Q\\
+Outlier rule per feature & IQR or Z by shape & \Q\\
+Imbalance handling & Class weights first & \Q\\
+Features dropped (collinearity) & |r| $\ge$ 0.85, VIF $>$ 10 & \Q\\
+Split & 80/20 grouped, adaptive & \Q\\\bottomrule
+\end{tabular}\end{center}
+
+\section{Phase 2 Plan}
+\begin{center}\small
+\begin{tabular}{@{}p{3.6cm}p{10.7cm}@{}}\toprule
+Date (2026) & Work\\\midrule
+Oct 14--15 & Submit DHS request (PR, HR); push repository; submit URL on Canvas\\
+Upon access & Run \texttt{src/audit.py}; fill all \Q\ values; verify codebook names\\
+Next day & Pipeline on real columns; eight figures (missingness matrix, distributions, outlier boxplots, correlation heatmap, collinear pair, target importance, transformation grid, PCA scree)\\
+Oct 17--18 & Reflection report; notebook run end to end; submit before Oct 18, 11:59 PM\\\bottomrule
+\end{tabular}\end{center}
+Phase 1 was due October 14.
+
+\bibliographystyle{unsrtnat}
+\bibliography{references}
+\end{document}
