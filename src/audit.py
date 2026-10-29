@@ -1,13 +1,7 @@
-"""Pre implementation data audit for the Phase 1 report tables.
+"""Pre implementation data audit: dimensions, types, missingness, target balance.
 
-Run once the DHS PR file is available:
-    python -m src.audit data/raw/<file>.dta --out phase1_strategy/audit.json
-
-Produces N, P, dtype inventory, per column and overall missingness,
-complete rows, and target imbalance. It reads the file but writes only
-aggregate statistics (no microdata), so the output is safe to commit.
-Nothing here has been run on real DHS data; it is tested on synthetic
-data only (see tests in the Phase 2 notebook).
+Run:  python -m src.audit data/raw/mis2023 --out reports/audit_mis2023.json
+Writes aggregate statistics only (no microdata), so the output is safe to commit.
 """
 from __future__ import annotations
 
@@ -17,47 +11,61 @@ import json
 import numpy as np
 import pandas as pd
 
-from src.transformers import DHSSentinelRecoder, TARGET_COLUMN_RDT
+from src import data as D
 
 
-def audit(df: pd.DataFrame, target: str = TARGET_COLUMN_RDT, max_discrete: int = 20) -> dict:
-    df = DHSSentinelRecoder().transform(df)
-    n, p = df.shape
-    miss = df.isna().sum()
-    kinds = {}
-    for c in df.columns:
-        s = df[c]
-        if pd.api.types.is_datetime64_any_dtype(s):
-            kinds[c] = "datetime"
-        elif isinstance(s.dtype, pd.CategoricalDtype) or s.dtype == object:
-            kinds[c] = "categorical (nominal or ordinal, decide from codebook)"
-        elif pd.api.types.is_integer_dtype(s) or s.dropna().mod(1).eq(0).all():
-            kinds[c] = "discrete" if s.nunique() > 2 else "binary or categorical code"
-        else:
-            kinds[c] = "continuous"
+def infer_kind(col: str, s: pd.Series) -> str:
+    if col in D.ORDINAL_PERSON:
+        return "ordinal"
+    if col in D.NOMINAL_PERSON:
+        return "nominal"
+    if col in D.DISCRETE_PERSON:
+        return "discrete"
+    if col in D.CONTINUOUS_PERSON or col in D.climate_feature_columns():
+        return "continuous"
+    return "other"
+
+
+def audit(raw_dir: str = "data/raw/mis2023") -> dict:
+    r = D.load_mis2023(raw_dir)
+    raw, df, feats = r["raw_pr"], r["data"], r["feature_columns"]
+    X = df[feats]
+    n, p = X.shape
+    miss = X.isna().sum()
+    pos = int(df.y.sum())
+    neg = int(len(df) - pos)
+    w = df.weight
     out = {
-        "N": int(n), "P": int(p),
+        "source_file_shape": {"rows": int(raw.shape[0]), "columns": int(raw.shape[1])},
+        "dropped_rows": r["dropped_rows"],
+        "model_table": {"N": int(n), "P": int(p)},
         "overall_missing_pct": float(miss.sum() / (n * p) * 100),
-        "complete_rows": int(df.notna().all(axis=1).sum()),
-        "rows_with_missing": int(df.isna().any(axis=1).sum()),
-        "missing_per_column": {c: {"count": int(miss[c]), "pct": float(miss[c] / n * 100)}
-                               for c in df.columns},
-        "inferred_kind": kinds,
+        "complete_rows": int(X.notna().all(axis=1).sum()),
+        "rows_with_missing": int(X.isna().any(axis=1).sum()),
+        "missing_per_column": {c: {"count": int(miss[c]), "pct": round(float(miss[c] / n * 100), 3)} for c in feats},
+        "kind_counts": pd.Series({c: infer_kind(c, X[c]) for c in feats}).value_counts().to_dict(),
+        "kind_by_column": {c: infer_kind(c, X[c]) for c in feats},
+        "target": {
+            "n_valid_tests": int(len(df)), "positives": pos, "negatives": neg,
+            "prevalence_pct": round(pos / len(df) * 100, 3),
+            "imbalance_ratio_neg_to_pos": round(neg / pos, 1),
+            "weighted_prevalence_pct": round(float(np.average(df.y, weights=w) * 100), 3),
+            "clusters": int(df.cluster.nunique()),
+            "clusters_with_a_positive": int(df[df.y == 1].cluster.nunique()),
+            "positives_under_5": int(((df.hv105 < 5) & (df.y == 1)).sum()),
+            "tests_under_5": int((df.hv105 < 5).sum()),
+        },
+        "excluded_with_reason": D.EXCLUDED_WITH_REASON,
     }
-    if target in df.columns:
-        y = df[target].dropna()
-        pos, neg = int((y == 1).sum()), int((y == 0).sum())
-        out["target"] = {"n_labeled": int(len(y)), "positives": pos, "negatives": neg,
-                         "prevalence_pct": float(pos / max(len(y), 1) * 100),
-                         "imbalance_ratio": float(neg / pos) if pos else None}
     return out
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("path")
-    ap.add_argument("--out", default="phase1_strategy/audit.json")
+    ap.add_argument("raw_dir", nargs="?", default="data/raw/mis2023")
+    ap.add_argument("--out", default="reports/audit_mis2023.json")
     a = ap.parse_args()
-    frame = pd.read_stata(a.path, convert_categoricals=False)
+    res = audit(a.raw_dir)
     with open(a.out, "w") as f:
-        json.dump(audit(frame), f, indent=2)
+        json.dump(res, f, indent=2)
+    print(json.dumps({k: res[k] for k in ("model_table", "overall_missing_pct", "complete_rows", "target")}, indent=1))

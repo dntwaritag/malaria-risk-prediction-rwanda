@@ -1,0 +1,314 @@
+{
+  "source_file_shape": {
+    "rows": 19038,
+    "columns": 206
+  },
+  "dropped_rows": {
+    "rows_total": 19038,
+    "rows_without_valid_test": 366
+  },
+  "model_table": {
+    "N": 18672,
+    "P": 53
+  },
+  "overall_missing_pct": 1.766139593539312,
+  "complete_rows": 9933,
+  "rows_with_missing": 8739,
+  "missing_per_column": {
+    "hv105": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv040": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv271": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv009": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv216": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hml1": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hml4": {
+      "count": 8739,
+      "pct": 46.803
+    },
+    "hv270": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv104": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv024": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv025": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv201": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv205": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv213": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv214": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv215": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv226": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv206": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv207": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv208": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv209": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv210": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv211": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv212": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv221": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv247": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv227": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hml10": {
+      "count": 8739,
+      "pct": 46.803
+    },
+    "hml12": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "hv219": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Rainfall_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Precipitation_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Wet_Days_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Mean_Temperature_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Maximum_Temperature_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Minimum_Temperature_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Land_Surface_Temperature_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Day_Land_Surface_Temp_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Night_Land_Surface_Temp_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Diurnal_Temperature_Range_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Enhanced_Vegetation_Index_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Aridity_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "PET_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Frost_Days_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "UN_Population_Density_2020": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Elevation": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Travel_Times": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Nightlights_Composite": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Global_Human_Footprint": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Growing_Season_Length": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Irrigation": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Livestock_Cattle": {
+      "count": 0,
+      "pct": 0.0
+    },
+    "Livestock_Goats": {
+      "count": 0,
+      "pct": 0.0
+    }
+  },
+  "kind_counts": {
+    "continuous": 26,
+    "nominal": 22,
+    "discrete": 4,
+    "ordinal": 1
+  },
+  "kind_by_column": {
+    "hv105": "continuous",
+    "hv040": "continuous",
+    "hv271": "continuous",
+    "hv009": "discrete",
+    "hv216": "discrete",
+    "hml1": "discrete",
+    "hml4": "discrete",
+    "hv270": "ordinal",
+    "hv104": "nominal",
+    "hv024": "nominal",
+    "hv025": "nominal",
+    "hv201": "nominal",
+    "hv205": "nominal",
+    "hv213": "nominal",
+    "hv214": "nominal",
+    "hv215": "nominal",
+    "hv226": "nominal",
+    "hv206": "nominal",
+    "hv207": "nominal",
+    "hv208": "nominal",
+    "hv209": "nominal",
+    "hv210": "nominal",
+    "hv211": "nominal",
+    "hv212": "nominal",
+    "hv221": "nominal",
+    "hv247": "nominal",
+    "hv227": "nominal",
+    "hml10": "nominal",
+    "hml12": "nominal",
+    "hv219": "nominal",
+    "Rainfall_2020": "continuous",
+    "Precipitation_2020": "continuous",
+    "Wet_Days_2020": "continuous",
+    "Mean_Temperature_2020": "continuous",
+    "Maximum_Temperature_2020": "continuous",
+    "Minimum_Temperature_2020": "continuous",
+    "Land_Surface_Temperature_2020": "continuous",
+    "Day_Land_Surface_Temp_2020": "continuous",
+    "Night_Land_Surface_Temp_2020": "continuous",
+    "Diurnal_Temperature_Range_2020": "continuous",
+    "Enhanced_Vegetation_Index_2020": "continuous",
+    "Aridity_2020": "continuous",
+    "PET_2020": "continuous",
+    "Frost_Days_2020": "continuous",
+    "UN_Population_Density_2020": "continuous",
+    "Elevation": "continuous",
+    "Travel_Times": "continuous",
+    "Nightlights_Composite": "continuous",
+    "Global_Human_Footprint": "continuous",
+    "Growing_Season_Length": "continuous",
+    "Irrigation": "continuous",
+    "Livestock_Cattle": "continuous",
+    "Livestock_Goats": "continuous"
+  },
+  "target": {
+    "n_valid_tests": 18672,
+    "positives": 179,
+    "negatives": 18493,
+    "prevalence_pct": 0.959,
+    "imbalance_ratio_neg_to_pos": 103.3,
+    "weighted_prevalence_pct": 0.987,
+    "clusters": 170,
+    "clusters_with_a_positive": 58,
+    "positives_under_5": 24,
+    "tests_under_5": 2412
+  },
+  "excluded_with_reason": {
+    "hml32": "microscopy result: a second test of the same outcome (target leakage)",
+    "hml35": "target",
+    "hml30-hml34, hml36-hml38": "test process and result variables",
+    "Malaria_Incidence_*, Malaria_Prevalence_*": "modelled malaria estimates derived from survey data (circular)",
+    "ITN_Coverage_*": "modelled intervention estimate that also encodes malaria programme data",
+    "hv001, hv002, hv003, hv021, DHSID": "identifiers, used only for grouping",
+    "hv005": "design weight, used for evaluation not as a feature",
+    "fever treatment, hemoglobin, anemia": "post diagnosis or same visit biomarkers; not in the feature set"
+  }
+}
