@@ -1,145 +1,77 @@
-# Climate and Demographic Informed Malaria Risk Prediction in Rwanda
+# Malaria Risk Prediction in Rwanda: Climate and Survey Informed Preprocessing Pipeline
 
-Course: 04-652 Artificial Intelligence System Design
-Assignment: Assignment 2, Data Preprocessing (Phase 1 and Phase 2)
+A leakage free preprocessing and modelling pipeline that estimates the probability that a
+household member tests positive for malaria (rapid diagnostic test), using household,
+demographic, residence and satellite climate covariates from the Rwanda 2023 Malaria
+Indicator Survey. The goal is to support targeted allocation of bed nets and indoor
+residual spraying (SDG 3, target 3.3).
 
-## Project Status
-
-This repository is under active development. The table below is kept
-current as work proceeds; do not trust numbers elsewhere in this README
-over this table if they ever disagree.
+## Status
 
 | Item | Status |
 |---|---|
-| GitHub repository structure | Created |
-| DHS Program data request submitted | Pending |
-| Raw data file obtained | Not yet |
-| Phase 1 Strategy Report | Written (PDF in phase1_strategy/); empirical values marked pending until data arrives |
-| Audit and collinearity code | `src/audit.py`, `CollinearityScreen` written; tested on synthetic data only |
-| Phase 2 pipeline and notebook | Not started, blocked on data |
+| Data access (DHS Program, Rwanda MIS 2023 and 2017) | Approved, files downloaded locally |
+| Data audit | Done, see `reports/audit_mis2023.json` |
+| Preprocessing pipeline (`src/`) | In progress |
+| Diagnostic figures (`figures/`) | In progress |
+| Reflection report | In progress |
 
-## 1. Problem Statement
+## Data
 
-Malaria remains a leading cause of morbidity in Rwanda despite
-substantial reductions achieved through vector control and treatment
-access programs over the past decade. This project predicts whether an
-individual child tested for malaria returns a positive result, using
-household, demographic, and residence level covariates collected in a
-nationally representative health survey. A model that reliably flags
-which household and child level profiles carry elevated malaria risk
-can support targeted distribution of bed nets and indoor spraying
-resources toward the households most likely to need them, rather than
-uniform allocation across an entire district or province.
+- **Source:** The DHS Program, Rwanda Malaria Indicator Survey 2023 (primary). The 2017 survey is
+  kept as a secondary comparison. Access requires a free, approved DHS account:
+  https://dhsprogram.com/data/dataset_admin/login_main.cfm
+- **Files used (Stata):** Household Member Recode `RWPR8A`, Household Recode `RWHR8A`,
+  Children's Recode `RWKR8A`, Geographic Data `RWGE8A` (cluster coordinates, displaced by DHS),
+  Geospatial Covariates `RWGC8A` (cluster level climate covariates).
+- **Unit of analysis:** one tested household member.
+- **Target (Y):** `hml35`, malaria rapid diagnostic test. `1` positive, `0` negative. Codes
+  `3` (not present), `4` (refused) and `6` (other) are treated as missing and excluded from supervised
+  training. They are never imputed.
+- **Measured size (2023, from the audit):** 19,038 rows by 206 columns in the member file. 18,672
+  members have a valid test result, of which 179 are positive (0.96%, about 104 to 1), spread over
+  170 survey clusters. Among children under 5 only 24 are positive, so all ages are used and age is a feature.
+- **Task type:** Binary classification, heavily imbalanced.
 
-This task directly supports Sustainable Development Goal 3, Good
-Health and Well Being, target 3.3, which calls for ending the
-epidemics of malaria by 2030.
+## Method summary
 
-Note on scope relative to the original project proposal: the proposal
-described a district month level early warning system using climate
-time series and aggregated case counts. Obtaining that granular,
-un-aggregated monthly district level series requires a formal data
-clearance request to the Rwanda Biomedical Centre, whose timeline
-exceeds this assignment's deadline. For Assignment 2 specifically, the
-operational dataset is therefore the Rwanda Demographic and Health
-Survey Program's individual level malaria testing data, which is
-obtainable within the assignment's timeframe, keeps the same country,
-disease, and SDG framing, and presents the same categories of
-preprocessing challenge (mixed variable types, nontrivial missingness,
-class imbalance, correlated predictors) that the course rubric
-evaluates. This deviation and its justification are documented in full
-in the Phase 1 Strategy Report.
+- All cleaning, imputation, encoding and scaling run inside a scikit-learn `Pipeline` and
+  `ColumnTransformer`. Statistics are learned on training folds only.
+- Splitting is grouped by survey cluster (`hv001`) with stratification, so no cluster appears in both
+  train and test.
+- Survey weights (`hv005`) are used in evaluation, with weighted and unweighted results both reported.
+- Probabilities are calibrated (Platt scaling or isotonic regression) on out of fold predictions.
+- Collinearity screening (|r| >= 0.85, VIF > 10) is applied to linear models only.
+- Climate covariates are cluster level values. Because DHS displaces cluster coordinates, buffer
+  averages are used, not exact points.
 
-## 2. Dataset Overview
-
-- **Source**: The DHS Program, Rwanda [Standard DHS or Malaria
-  Indicator Survey, to be finalized once the data request is
-  approved]. Access portal: https://dhsprogram.com/data/dataset_admin/login_main.cfm
-- **File used**: Person Recode (PR), which contains the malaria rapid
-  diagnostic test result (`hml35`) and microscopy result (`hml32`) for
-  eligible household members, per DHS's Guide to DHS Statistics
-  documentation of the malaria prevalence indicator.
-- **Sample size (N)**: Pending. Will be reported as the exact row
-  count of the PR file after filtering to the malaria testing eligible
-  population (children 6 to 59 months, de facto household members),
-  not the full household roster row count.
-- **Feature count (P)**: Pending. Will be reported as the number of
-  columns retained after an initial audit removes identifier columns,
-  columns unrelated to this prediction task, and columns that would
-  constitute target leakage (for example any derived malaria morbidity
-  or treatment variable computed from the test result itself).
-- **Target variable (Y)**: Malaria rapid diagnostic test result
-  (`hml35`), recoded to a binary indicator: 1 if positive, 0 if
-  negative. Rows with a DHS sentinel missing code for this field are
-  excluded from supervised training and reported separately as a
-  missingness statistic, not imputed, since a test result cannot be
-  meaningfully imputed from other covariates without strong assumptions.
-
-## 3. Task Type
-
-**Binary Classification.**
-
-This is a scope correction from the original project proposal's three
-level ordinal classification (normal, elevated, epidemic incidence),
-which was defined for district month aggregated case counts. At the
-individual test result level, the only outcome DHS records is a
-binary positive or negative result, so the task type for this
-assignment is binary classification. See the Phase 1 Strategy Report
-for the full reasoning behind this change.
-
-## 4. Repository Structure
+## Repository layout
 
 ```
 .
-├── .gitignore
-├── requirements.txt
 ├── README.md
+├── requirements.txt
 ├── data/
-│   ├── raw/            # Original DHS export, never committed (see .gitignore)
-│   └── processed/      # Cleaned, encoded, scaled feature table
-├── phase1_strategy/
-│   └── Phase1_Strategy_Report.pdf
-├── phase2_implementation/
-│   ├── notebooks/
-│   │   └── pipeline_execution.ipynb
-│   └── Phase2_Final_Report.pdf
-├── src/
-│   ├── __init__.py
-│   ├── transformers.py      # Custom Scikit Learn transformers
-│   └── pipeline_builder.py  # ColumnTransformer and Pipeline composition
-└── figures/              # 8 required diagnostic figures, PNG, 300 DPI
+│   ├── raw/          # DHS files, never committed
+│   └── processed/    # model ready tables, never committed
+├── src/              # reusable transformers, pipeline, audit code
+├── notebooks/        # executable analysis
+├── figures/          # diagnostic plots, 300 DPI
+├── reports/          # audit output and written reports
+└── docs/             # strategy documents and notes
 ```
 
-## 5. Reproduction Steps
+## Reproduce
 
-1. Create and activate a virtual environment, then install
-   dependencies:
-   ```
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-2. Obtain the Rwanda DHS PR (Person Recode) file from
-   https://dhsprogram.com/data (requires a free account and an
-   approved data request; approval is not guaranteed to be instant).
-   Place the downloaded file in `data/raw/`. This file is excluded
-   from version control by `.gitignore`, in compliance with the DHS
-   Program's data use agreement, which does not permit redistribution
-   of microdata.
-3. Open `phase2_implementation/notebooks/pipeline_execution.ipynb` and
-   run all cells in order. The notebook reads from `data/raw/`, writes
-   the final processed feature table to `data/processed/`, and saves
-   all 8 diagnostic figures to `figures/`.
-4. The preprocessing logic itself lives in `src/transformers.py` and
-   `src/pipeline_builder.py`, imported by the notebook rather than
-   duplicated inside it, so the same pipeline code can be reused
-   outside the notebook (for example in a future scoring script).
+```
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+# place the DHS files under data/raw/mis2023/ (see "Data" above)
+python -m src.audit data/raw/mis2023/RWPR8AFL.DTA --out reports/audit_mis2023.json
+jupyter notebook notebooks/pipeline_execution.ipynb
+```
 
-## 6. Data Use and Privacy Note
+## Data use
 
-DHS Program microdata is de identified individual level survey data,
-released under a data use agreement that permits use for approved
-research and coursework but prohibits redistribution of the raw
-microdata itself. This repository therefore versions the processing
-code and the documentation of what the data contains, but never the
-raw or intermediate data files themselves. See `.gitignore`.
+DHS microdata is released under a data use agreement that forbids redistribution. Raw and
+processed data files are excluded by `.gitignore`. Only code and aggregate statistics are versioned.
