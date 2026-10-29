@@ -15,6 +15,8 @@ actual survey files. Re-check them when switching to another survey round.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -39,7 +41,17 @@ DHS_SENTINEL_CODES = {
 }
 
 
-class DHSSentinelRecoder(BaseEstimator, TransformerMixin):
+class _OneToOneNames:
+    """Expose input feature names so pandas output works through ColumnTransformer."""
+
+    def get_feature_names_out(self, input_features=None):
+        return np.asarray(input_features if input_features is not None else self.feature_names_in_, dtype=object)
+
+    def _remember(self, X):
+        self.feature_names_in_ = np.asarray(list(pd.DataFrame(X).columns), dtype=object)
+
+
+class DHSSentinelRecoder(_OneToOneNames, BaseEstimator, TransformerMixin):
     """Replace DHS specific sentinel missing codes with np.nan.
 
     Why this exists: DHS recode files use small integer codes (for
@@ -65,6 +77,7 @@ class DHSSentinelRecoder(BaseEstimator, TransformerMixin):
         # Stateless: no statistic is learned from the data, so there is
         # no train/test leakage risk from this particular transformer.
         # It still implements fit to stay compatible with Pipeline.
+        self._remember(X)
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
@@ -75,7 +88,7 @@ class DHSSentinelRecoder(BaseEstimator, TransformerMixin):
         return X
 
 
-class RareCategoryGrouper(BaseEstimator, TransformerMixin):
+class RareCategoryGrouper(_OneToOneNames, BaseEstimator, TransformerMixin):
     """Collapse infrequent levels of a nominal categorical column into "Other".
 
     Why this exists: DHS nominal fields such as ethnicity, religion, or
@@ -105,6 +118,7 @@ class RareCategoryGrouper(BaseEstimator, TransformerMixin):
         self.keep_categories_: dict[str, set] = {}
 
     def fit(self, X: pd.DataFrame, y=None):
+        self._remember(X)
         self.keep_categories_ = {}
         n = len(X)
         for column in X.columns:
@@ -121,7 +135,7 @@ class RareCategoryGrouper(BaseEstimator, TransformerMixin):
         return X
 
 
-class IQRWinsorizer(BaseEstimator, TransformerMixin):
+class IQRWinsorizer(_OneToOneNames, BaseEstimator, TransformerMixin):
     """Cap continuous values outside Q1 minus 1.5 IQR to Q3 plus 1.5 IQR.
 
     Why this exists: the assignment specifies the 1.5 times IQR rule for
@@ -141,6 +155,7 @@ class IQRWinsorizer(BaseEstimator, TransformerMixin):
         self.bounds_: dict[str, tuple] = {}
 
     def fit(self, X: pd.DataFrame, y=None):
+        self._remember(X)
         columns = self.columns or X.columns.tolist()
         self.bounds_ = {}
         for column in columns:
@@ -160,7 +175,7 @@ class IQRWinsorizer(BaseEstimator, TransformerMixin):
         return X
 
 
-class ZScoreWinsorizer(BaseEstimator, TransformerMixin):
+class ZScoreWinsorizer(_OneToOneNames, BaseEstimator, TransformerMixin):
     """Cap continuous values beyond plus or minus z standard deviations.
 
     Why this exists: the assignment specifies the Z score rule for
@@ -176,6 +191,7 @@ class ZScoreWinsorizer(BaseEstimator, TransformerMixin):
         self.bounds_: dict[str, tuple] = {}
 
     def fit(self, X: pd.DataFrame, y=None):
+        self._remember(X)
         columns = self.columns or X.columns.tolist()
         self.bounds_ = {}
         for column in columns:
@@ -194,6 +210,37 @@ class ZScoreWinsorizer(BaseEstimator, TransformerMixin):
         return X
 
 
+class NominalCaster(_OneToOneNames, BaseEstimator, TransformerMixin):
+    """Cast DHS coded categorical columns to strings and make missing an explicit level.
+
+    DHS stores categories as integer codes. Treating them as numbers would invent an order, so they are
+    cast to text. Missing values become the level "missing" because, in this survey, missingness is
+    structural (for example, no bed net slept under) and therefore informative.
+    """
+
+    def fit(self, X, y=None):
+        self._remember(X)
+        return self
+
+    def transform(self, X):
+        X = pd.DataFrame(X).copy()
+        for c in X.columns:
+            X[c] = X[c].astype("string").fillna("missing").astype(object)
+        return X
+
+
+class Log1pClip(_OneToOneNames, BaseEstimator, TransformerMixin):
+    """log(1 + x) after clipping at zero, for non negative, right skewed features."""
+
+    def fit(self, X, y=None):
+        self._remember(X)
+        return self
+
+    def transform(self, X):
+        X = pd.DataFrame(X).copy()
+        return np.log1p(X.clip(lower=0))
+
+
 class CollinearityScreen(BaseEstimator, TransformerMixin):
     """Drop one feature from each collinear pair, then iteratively by VIF.
 
@@ -209,16 +256,20 @@ class CollinearityScreen(BaseEstimator, TransformerMixin):
     Expects a numeric, already imputed DataFrame (no NaN).
     """
 
-    def __init__(self, corr_threshold: float = 0.85, vif_threshold: float = 10.0):
+    def __init__(self, corr_threshold: float = 0.85, vif_threshold: float = 10.0, candidate_columns=None):
         self.corr_threshold = corr_threshold
         self.vif_threshold = vif_threshold
+        self.candidate_columns = candidate_columns
 
     def fit(self, X: pd.DataFrame, y=None):
         from statsmodels.stats.outliers_influence import variance_inflation_factor
 
         if y is None:
             raise ValueError("CollinearityScreen.fit needs y for tie breaking.")
-        X = pd.DataFrame(X).astype(float)
+        Xfull = pd.DataFrame(X)
+        cand = [c for c in (self.candidate_columns or list(Xfull.columns)) if c in Xfull.columns]
+        passthrough = [c for c in Xfull.columns if c not in cand]
+        X = Xfull[cand].astype(float)
         y = pd.Series(np.asarray(y, dtype=float), index=X.index)
         target_r = X.apply(lambda c: abs(np.corrcoef(c, y)[0, 1])
                            if c.std() > 0 else 0.0).fillna(0.0)
@@ -234,18 +285,25 @@ class CollinearityScreen(BaseEstimator, TransformerMixin):
                     self.dropped_.append((loser, f"|r|={corr.loc[a, b]:.2f} with partner"))
 
         while len(keep) > 1:
-            vifs = pd.Series(
-                [variance_inflation_factor(X[keep].values, i) for i in range(len(keep))],
-                index=keep,
-            )
+            with warnings.catch_warnings():
+                # rank deficient designs give inf VIF, which is handled below by dropping the column
+                warnings.simplefilter("ignore")
+                vifs = pd.Series(
+                    [variance_inflation_factor(X[keep].values, i) for i in range(len(keep))],
+                    index=keep,
+                )
             worst = vifs.idxmax()
             if not np.isfinite(vifs[worst]) or vifs[worst] > self.vif_threshold:
                 keep.remove(worst)
                 self.dropped_.append((worst, f"VIF={vifs[worst]:.1f}"))
             else:
                 break
-        self.keep_columns_ = keep
+        self.keep_columns_ = passthrough + keep
+        self.corr_before_ = corr
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(X)[self.keep_columns_]
+
+    def get_feature_names_out(self, input_features=None):
+        return np.asarray(self.keep_columns_, dtype=object)
