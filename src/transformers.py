@@ -8,16 +8,9 @@ ever see X_train (or a single cross validation training fold), never the
 full dataset, so that no information from validation or test rows leaks
 into a learned statistic (a threshold, a mean, a category frequency).
 
-IMPORTANT, READ BEFORE USE:
-The exact column names and sentinel missing codes below are drafted from
-DHS's publicly documented Recode Manual conventions and the DHS Guide to
-Statistics page for malaria prevalence in children. They have not yet
-been verified against the actual Rwanda PR (Person Recode) file, because
-that file had not yet been approved and downloaded at the time this
-module was written. Treat every value in DHS_SENTINEL_CODES and every
-column name constant as a placeholder to confirm against your own
-codebook (the .do file or value label file that ships with your DHS
-download) before trusting any output from this module.
+NOTE ON CONFIGURATION (verified on the Rwanda MIS 2023 files):
+Column names and sentinel codes below were checked against the value labels of the
+actual survey files. Re-check them when switching to another survey round.
 """
 
 from __future__ import annotations
@@ -28,32 +21,21 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 
 # ---------------------------------------------------------------------------
-# PLACEHOLDER CONFIGURATION. Verify every entry against the real codebook.
+# DHS configuration, verified against the Rwanda MIS 2023 value labels.
 # ---------------------------------------------------------------------------
 
-# DHS Person Recode (PR) file, standard variable names per the DHS Guide to
-# Statistics "Prevalence of Malaria in Children" page. Confirm these exist
-# with these exact names in the Rwanda file you were approved for; variable
-# availability can vary slightly by survey round.
-TARGET_COLUMN_RDT = "hml35"       # Result of malaria rapid diagnostic test
-TARGET_COLUMN_MICROSCOPY = "hml32"  # Final result of malaria from blood smear
-ELIGIBILITY_AGE_MONTHS = "hc1"      # Child's age in months
-ELIGIBILITY_SLEPT_HERE = "hv103"    # Slept in household last night (1 = yes)
-ELIGIBILITY_SELECTED_FOR_TEST = "hv042"  # Household selected for testing module
-SAMPLE_WEIGHT = "hv005"             # Household sample weight, for weighted stats
+TARGET_COLUMN_RDT = "hml35"          # malaria rapid diagnostic test result
+TARGET_COLUMN_MICROSCOPY = "hml32"   # microscopy result: excluded as a feature (second test)
+CLUSTER_ID = "hv001"                 # survey cluster, used for grouped splitting
+SAMPLE_WEIGHT = "hv005"              # design weight, divide by 1e6
 
-# DHS numeric sentinel codes that are NOT the same as a true blank cell in
-# the file, but represent a documented, non random missingness category
-# (child not present, refused, test not completed, equipment failure, etc).
-# pandas read_stata / read_spss will load these as ordinary integers, not as
-# NaN, unless you recode them explicitly. Getting this wrong means your
-# missingness audit in Phase 1 will undercount real missing data.
-# These specific integer codes are the DHS wide convention for this kind of
-# field (commonly 6 = other/inconclusive, 9 = missing); confirm the exact
-# values for hml35 and hml32 in your codebook before relying on this dict.
+# Codes that mean "no usable result" rather than a measurement. Verified labels (MIS 2023):
+#   hml35: 0 negative, 1 positive, 3 not present, 4 refused, 6 other
+#   hml32: 0 negative, 1 positive, 6 test undetermined, 7 sample not found in lab database
 DHS_SENTINEL_CODES = {
-    TARGET_COLUMN_RDT: [9],
-    TARGET_COLUMN_MICROSCOPY: [6, 9],
+    TARGET_COLUMN_RDT: [3, 4, 6],
+    TARGET_COLUMN_MICROSCOPY: [6, 7],
+    "hv105": [98],        # age: don't know
 }
 
 
