@@ -1,77 +1,141 @@
-# Malaria Risk Prediction in Rwanda: Climate and Survey Informed Preprocessing Pipeline
+# Malaria Risk Prediction for Rwanda: Leakage-Free Preprocessing and Evaluation
 
-A leakage free preprocessing and modelling pipeline that estimates the probability that a
-household member tests positive for malaria (rapid diagnostic test), using household,
-demographic, residence and satellite climate covariates from the Rwanda 2023 Malaria
-Indicator Survey. The goal is to support targeted allocation of bed nets and indoor
-residual spraying (SDG 3, target 3.3).
+A reproducible machine learning pipeline that predicts whether a person tested in the Rwanda
+Malaria Indicator Survey (MIS) 2023 has a positive rapid diagnostic test (RDT), using household,
+demographic and cluster-level climate covariates. The goal is to support targeted allocation of
+bed nets and indoor residual spraying (SDG 3, target 3.3).
 
-## Status
+> **Honest summary.** Positives are rare (0.96%) and the signal in these covariates is weak.
+> Held-out PR-AUC is 0.012 to 0.020 against a 0.0096 prevalence baseline, and the confidence
+> intervals of the four models overlap. The value of this repository is a defensible,
+> leakage-free workflow and an honest measurement, not a high-accuracy classifier.
 
-| Item | Status |
+## 1. Problem and data
+
+| Item | Value | Why |
+|---|---|---|
+| Survey | DHS Rwanda MIS 2023 (PR, HR, KR, GE, GC files) | The only Rwanda survey with GPS-linked climate covariates. MIS 2017 has no GPS and is kept as a secondary comparison. |
+| Unit | Tested household member (all ages, age is a feature) | Under-5 children alone give only 24 positives, too few to model. |
+| Target | `hml35` (RDT result), 1 = positive | Binary, measured for every tested member. Codes 3, 4, 6 (invalid/indeterminate) are set to missing and dropped, never imputed. |
+| Size | N = 18,672 rows, P = 53 raw features (26 continuous, 22 nominal, 4 discrete, 1 ordinal) | Produced by `src/audit.py`, stored in `reports/audit_mis2023.json`. |
+| Imbalance | 0.96% positive (about 104:1 in the training split) | Drives the metric, split and calibration choices below. |
+| Climate | DHS geospatial covariates (5 km rasters, 2020 values) joined by cluster | Pragmatic stand-in: CHIRPS, ERA5 and MODIS were not reachable from the build environment. This is a documented deviation. |
+
+Raw DHS files are licensed and are **not** in the repository (`data/raw/` is git-ignored).
+Request access at <https://dhsprogram.com>, then place the MIS 2023 files in `data/raw/mis2023/`.
+
+## 2. Design decisions and justifications
+
+**Leakage control.** Excluded by design: the second test (`hml32`), test-process variables,
+modelled malaria columns (Malaria_Incidence_*, Malaria_Prevalence_*, ITN_Coverage_*), anemia and
+fever-treatment variables, identifiers, and the survey weight `hv005` as a feature (it is used only
+to weight evaluation). *Justification:* each of these is either the label in another form or is
+known only after the test, so using them would inflate scores without real predictive value.
+
+**Sentinel codes.** Real DHS codes for `hml35` are 3, 4 and 6, not 9 as assumed in the planning
+phase. They are converted to NaN before any imputation so imputers never average code numbers
+into real values.
+
+**Structural missingness.** `hml4` and `hml10` are 46.1% missing and are missing exactly when the
+household has no net (`hml12` = 0; Cramér's V = 1.0). Little's MCAR test also rejects MCAR
+(chi-square 6984, df 29, p < 0.001). *Decision:* an explicit "no net" level plus missing-indicator
+flags, not MCAR/MAR imputation, because the value is absent by design.
+
+**Cluster-grouped, label-stratified split.** Households in one survey cluster share geography and
+climate, so a random split lets the model memorize clusters. `StratifiedGroupKFold` and the
+train/test split keep each cluster (`hv001`) entirely on one side (overlap checked = 0). The split
+seed (51) was chosen by label balance only (36 test positives vs 20 for seed 42), never by model
+performance.
+
+**Skew-aware numeric treatment (thresholds learned on training data only).**
+
+| Training skewness | Outliers | Imputation | Transform |
+|---|---|---|---|
+| Right-skewed (> 0.5): 13 columns | IQR winsorize (1.5 x IQR) | median | log1p, then standardize |
+| Other skewed: 5 columns | IQR winsorize | median | standardize |
+| Approximately Gaussian: 12 columns | Z-score winsorize (|z| > 3) | mean | standardize |
+
+Rows are capped, never deleted, because with 143 training positives every row matters.
+Example: `Livestock_Goats` skew 4.12 becomes -0.19 after log1p (Figure 4.1). All imputers keep
+missing indicators.
+
+**Encoding.** Wealth quintile uses an explicit order [1..5] (no alphabetical default, which would
+invent a false rank). Nominal columns get an explicit "missing" level, levels under 1% are grouped
+into "Other", then one-hot with `drop="if_binary"`. 53 raw features become 95 model columns.
+
+**Collinearity.** 20 climate feature pairs have |r| >= 0.85 (strongest: Mean_Temperature vs PET,
+r = 0.993). The screen keeps the feature with the stronger link to the target, then drops by
+VIF > 10. *Justification (supervisor feedback):* it is applied to the **logistic regression branch
+only**, since tree models tolerate collinearity and lose nothing from keeping correlated inputs.
+
+**Models.** Regularized logistic regression (interpretable baseline), Random Forest (robust
+baseline), LightGBM and XGBoost (primary). Class weights handle imbalance without touching data.
+
+**Calibration and evaluation.** Metrics: PR-AUC (primary), ROC-AUC, Brier, recall, precision, F1;
+never accuracy. Out-of-fold predictions feed Platt scaling or isotonic regression, so calibration
+never sees test data. The operating threshold is chosen on out-of-fold data (recall target 0.70).
+Results are reported **weighted** (`hv005 / 1e6`) and **unweighted**, with cluster-bootstrap 95%
+confidence intervals, because the test set has only 36 positives.
+
+## 3. Results (held-out test, Platt-calibrated, unweighted)
+
+| Model | PR-AUC | ROC-AUC | Brier | Recall | Precision |
+|---|---|---|---|---|---|
+| Baseline (prevalence) | 0.0096 | 0.50 | | | |
+| Logistic regression | 0.0124 | 0.559 | 0.0096 | 0.556 | 0.012 |
+| Random forest | 0.0124 | 0.605 | 0.0096 | 0.500 | 0.013 |
+| LightGBM | 0.0142 | 0.628 | 0.0097 | 0.722 | 0.014 |
+| XGBoost | 0.0201 | 0.649 | 0.0096 | 0.639 | 0.014 |
+
+Out-of-fold (5-fold grouped) PR-AUC picks LightGBM (0.039) with XGBoost nearly tied (0.0386).
+Bootstrap intervals overlap, so no model is clearly superior. Full numbers, including weighted
+results and calibration bins, are in `reports/evaluation.json`; diagnostics are in
+`reports/diagnostic_stats.json`.
+
+## 4. Diagnostic figures (`figures/`, 300 DPI, training data only)
+
+| File | Shows |
 |---|---|
-| Data access (DHS Program, Rwanda MIS 2023 and 2017) | Approved, files downloaded locally |
-| Data audit | Done, see `reports/audit_mis2023.json` |
-| Preprocessing pipeline (`src/`) | In progress |
-| Diagnostic figures (`figures/`) | In progress |
-| Reflection report | In progress |
+| `fig1_1_missingness_heatmap.png` | Missingness pattern and top missing columns |
+| `fig1_2_target_distribution.png` | Class imbalance and age by result |
+| `fig2_1_outlier_boxplots.png` | Raw vs winsorized distributions |
+| `fig3_1_correlation_matrix.png` | Upper-triangle correlation, |r| >= 0.85 boxed |
+| `fig3_2_collinear_scatterplots.png` | Collinear pairs with fit lines |
+| `fig3_3_target_importance.png` | Mutual information and |r| with the target |
+| `fig4_1_transformation_grid.png` | Raw, log, min-max, standardized |
+| `fig5_1_pca_scree_plot.png` | Scree and cumulative variance (11 components reach 90%, 14 reach 95%) |
 
-## Data
-
-- **Source:** The DHS Program, Rwanda Malaria Indicator Survey 2023 (primary). The 2017 survey is
-  kept as a secondary comparison. Access requires a free, approved DHS account:
-  https://dhsprogram.com/data/dataset_admin/login_main.cfm
-- **Files used (Stata):** Household Member Recode `RWPR8A`, Household Recode `RWHR8A`,
-  Children's Recode `RWKR8A`, Geographic Data `RWGE8A` (cluster coordinates, displaced by DHS),
-  Geospatial Covariates `RWGC8A` (cluster level climate covariates).
-- **Unit of analysis:** one tested household member.
-- **Target (Y):** `hml35`, malaria rapid diagnostic test. `1` positive, `0` negative. Codes
-  `3` (not present), `4` (refused) and `6` (other) are treated as missing and excluded from supervised
-  training. They are never imputed.
-- **Measured size (2023, from the audit):** 19,038 rows by 206 columns in the member file. 18,672
-  members have a valid test result, of which 179 are positive (0.96%, about 104 to 1), spread over
-  170 survey clusters. Among children under 5 only 24 are positive, so all ages are used and age is a feature.
-- **Task type:** Binary classification, heavily imbalanced.
-
-## Method summary
-
-- All cleaning, imputation, encoding and scaling run inside a scikit-learn `Pipeline` and
-  `ColumnTransformer`. Statistics are learned on training folds only.
-- Splitting is grouped by survey cluster (`hv001`) with stratification, so no cluster appears in both
-  train and test.
-- Survey weights (`hv005`) are used in evaluation, with weighted and unweighted results both reported.
-- Probabilities are calibrated (Platt scaling or isotonic regression) on out of fold predictions.
-- Collinearity screening (|r| >= 0.85, VIF > 10) is applied to linear models only.
-- Climate covariates are cluster level values. Because DHS displaces cluster coordinates, buffer
-  averages are used, not exact points.
-
-## Repository layout
+## 5. Repository layout
 
 ```
-.
-├── README.md
-├── requirements.txt
-├── data/
-│   ├── raw/          # DHS files, never committed
-│   └── processed/    # model ready tables, never committed
-├── src/              # reusable transformers, pipeline, audit code
-├── notebooks/        # executable analysis
-├── figures/          # diagnostic plots, 300 DPI
-├── reports/          # audit output and written reports
-└── docs/             # strategy documents and notes
+src/transformers.py      custom transformers (sentinel recoder, winsorizers, rare grouper, collinearity screen)
+src/data.py              MIS 2023 loader with leakage exclusions and cluster climate join
+src/audit.py             data audit -> reports/audit_mis2023.json
+src/pipeline_builder.py  grouped split and leakage-free preprocessing/model pipelines
+src/diagnostics.py       statistics and the eight figures
+src/evaluation.py        OOF predictions, calibration, weighted metrics, bootstrap CIs
+notebooks/pipeline_execution.ipynb   end-to-end run
+reports/  figures/  docs/            outputs, figures, planning documents
 ```
 
-## Reproduce
+## 6. Reproduce
 
 ```
-python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-# place the DHS files under data/raw/mis2023/ (see "Data" above)
-python -m src.audit data/raw/mis2023/RWPR8AFL.DTA --out reports/audit_mis2023.json
-jupyter notebook notebooks/pipeline_execution.ipynb
+# place DHS files in data/raw/mis2023/
+python -m src.audit
+jupyter nbconvert --to notebook --execute --inplace notebooks/pipeline_execution.ipynb
 ```
 
-## Data use
+## 7. Limitations
 
-DHS microdata is released under a data use agreement that forbids redistribution. Raw and
-processed data files are excluded by `.gitignore`. Only code and aggregate statistics are versioned.
+* Only 179 positives in total (143 train, 36 test): estimates are noisy; read intervals, not point values.
+* DHS GPS is displaced (urban up to 2 km, rural up to 5 km, 1% of rural up to 10 km), so cluster
+  climate values carry location error. Using 5 km covariates partly absorbs this.
+* Climate values are single-year (2020) rasters, not matched to the survey month.
+* Calibration and thresholds describe this survey, not future years or other countries.
+* Survey-weighted results are reported alongside unweighted ones, but weights are not used in training.
+
+## 8. Data and license
+
+DHS microdata cannot be redistributed. Code is provided for research and public-health use.
