@@ -160,10 +160,11 @@ def run_diagnostics(train: pd.DataFrame, feature_columns: list[str], figures_dir
     for c in num:
         q1, q3 = X[c].quantile([.25, .75]); i = q3 - q1
         lo, hi = q1 - 1.5 * i, q3 + 1.5 * i
+        degenerate = bool(i == 0)
         n_out = int(((X[c] < lo) | (X[c] > hi)).sum())
         iqr_rows[c] = {"skew": round(float(skew[c]), 2), "kurtosis": round(float(stats.kurtosis(X[c].dropna())), 2),
                        "q1": round(float(q1), 3), "q3": round(float(q3), 3), "lower": round(float(lo), 3),
-                       "upper": round(float(hi), 3), "n_outliers": n_out, "pct_outliers": round(n_out / len(X) * 100, 2)}
+                       "upper": round(float(hi), 3), "n_outliers": n_out, "pct_outliers": round(n_out / len(X) * 100, 2), "degenerate_iqr": degenerate}
     res["outliers_iqr"] = iqr_rows
     top = sorted(iqr_rows, key=lambda c: iqr_rows[c]["n_outliers"], reverse=True)[:6]
     wins = IQRWinsorizer(factor=1.5).fit(X[top]); Xw = wins.transform(X[top])

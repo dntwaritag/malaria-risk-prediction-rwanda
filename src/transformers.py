@@ -164,6 +164,14 @@ class IQRWinsorizer(_OneToOneNames, BaseEstimator, TransformerMixin):
             iqr = q3 - q1
             lower = q1 - self.factor * iqr
             upper = q3 + self.factor * iqr
+            if iqr == 0:
+                # Degenerate fence: more than half the values are identical, so Q1 == Q3 and the
+                # 1.5 IQR rule would flatten every non-modal value to the mode (information loss).
+                # Fall back to the 1st and 99th training percentiles, or no capping if those match.
+                lower, upper = X[column].quantile(0.01), X[column].quantile(0.99)
+                if lower == upper:
+                    lower, upper = -np.inf, np.inf
+                self.degenerate_ = getattr(self, "degenerate_", []) + [column]
             self.bounds_[column] = (lower, upper)
         return self
 

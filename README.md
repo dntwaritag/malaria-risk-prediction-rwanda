@@ -1,4 +1,4 @@
-# Malaria Risk Prediction for Rwanda: Leakage-Free Preprocessing and Evaluation
+,# Malaria Risk Prediction for Rwanda: Leakage-Free Preprocessing and Evaluation
 
 A reproducible machine learning pipeline that predicts whether a person tested in the Rwanda
 Malaria Indicator Survey (MIS) 2023 has a positive rapid diagnostic test (RDT), using household,
@@ -6,7 +6,7 @@ demographic and cluster-level climate covariates. The goal is to support targete
 bed nets and indoor residual spraying (SDG 3, target 3.3).
 
 > **Honest summary.** Positives are rare (0.96%) and the signal in these covariates is weak.
-> Held-out PR-AUC is 0.012 to 0.020 against a 0.0096 prevalence baseline, and the confidence
+> Held-out PR-AUC is 0.013 to 0.020 against a 0.0096 prevalence baseline, and the confidence
 > intervals of the four models overlap. The value of this repository is a defensible,
 > leakage-free workflow and an honest measurement, not a high-accuracy classifier.
 
@@ -51,10 +51,12 @@ performance.
 
 | Training skewness | Outliers | Imputation | Transform |
 |---|---|---|---|
-| Right-skewed (> 0.5): 13 columns | IQR winsorize (1.5 x IQR) | median | log1p, then standardize |
+| Right-skewed (> 0.5): 13 columns | IQR winsorize (1.5 x IQR; 1st/99th percentile if IQR = 0) | median | log1p, then standardize |
 | Other skewed: 5 columns | IQR winsorize | median | standardize |
 | Approximately Gaussian: 12 columns | Z-score winsorize (|z| > 3) | mean | standardize |
 
+`Frost_Days_2020` has Q1 = Q3 = 0, so the plain 1.5 IQR rule would have flagged 20% of rows and flattened the
+feature to a constant; the winsorizer therefore falls back to percentile bounds when the IQR is zero.
 Rows are capped, never deleted, because with 143 training positives every row matters.
 Example: `Livestock_Goats` skew 4.12 becomes -0.19 after log1p (Figure 4.1). All imputers keep
 missing indicators.
@@ -82,13 +84,15 @@ confidence intervals, because the test set has only 36 positives.
 | Model | PR-AUC | ROC-AUC | Brier | Recall | Precision |
 |---|---|---|---|---|---|
 | Baseline (prevalence) | 0.0096 | 0.50 | | | |
-| Logistic regression | 0.0124 | 0.559 | 0.0096 | 0.556 | 0.012 |
-| Random forest | 0.0124 | 0.605 | 0.0096 | 0.500 | 0.013 |
-| LightGBM | 0.0142 | 0.628 | 0.0097 | 0.722 | 0.014 |
-| XGBoost | 0.0201 | 0.649 | 0.0096 | 0.639 | 0.014 |
+| Logistic regression | 0.0132 | 0.546 | 0.0096 | 0.528 | 0.011 |
+| Random forest | 0.0138 | 0.625 | 0.0096 | 0.472 | 0.013 |
+| LightGBM | 0.0156 | 0.656 | 0.0097 | 0.750 | 0.015 |
+| XGBoost | 0.0203 | 0.643 | 0.0096 | 0.639 | 0.014 |
 
-Out-of-fold (5-fold grouped) PR-AUC picks LightGBM (0.039) with XGBoost nearly tied (0.0386).
-Bootstrap intervals overlap, so no model is clearly superior. Full numbers, including weighted
+Out-of-fold (5-fold grouped) PR-AUC picks **XGBoost** (0.0455), ahead of LightGBM (0.0393), logistic
+regression (0.0289) and random forest (0.0275); XGBoost also has the best test PR-AUC (0.0203, weighted 0.0193).
+LightGBM has the best test ROC-AUC (0.656) and recall (0.75). Bootstrap intervals overlap, so the ranking among
+gradient-boosting models is not statistically established; both clearly beat the linear and bagging baselines out-of-fold. Full numbers, including weighted
 results and calibration bins, are in `reports/evaluation.json`; diagnostics are in
 `reports/diagnostic_stats.json`.
 
@@ -103,7 +107,7 @@ results and calibration bins, are in `reports/evaluation.json`; diagnostics are 
 | `fig3_2_collinear_scatterplots.png` | Collinear pairs with fit lines |
 | `fig3_3_target_importance.png` | Mutual information and |r| with the target |
 | `fig4_1_transformation_grid.png` | Raw, log, min-max, standardized |
-| `fig5_1_pca_scree_plot.png` | Scree and cumulative variance (11 components reach 90%, 14 reach 95%) |
+| `fig5_1_pca_scree_plot.png` | Scree and cumulative variance (12 components reach 90%, 15 reach 95%) |
 
 ## 5. Repository layout
 

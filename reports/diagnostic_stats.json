@@ -41,7 +41,8 @@
       "lower": -33.0,
       "upper": 79.0,
       "n_outliers": 124,
-      "pct_outliers": 0.83
+      "pct_outliers": 0.83,
+      "degenerate_iqr": false
     },
     "hv040": {
       "skew": 1.04,
@@ -51,7 +52,8 @@
       "lower": 836.5,
       "upper": 2504.5,
       "n_outliers": 128,
-      "pct_outliers": 0.86
+      "pct_outliers": 0.86,
+      "degenerate_iqr": false
     },
     "hv271": {
       "skew": 1.22,
@@ -61,7 +63,8 @@
       "lower": -244964.75,
       "upper": 230637.25,
       "n_outliers": 569,
-      "pct_outliers": 3.81
+      "pct_outliers": 3.81,
+      "degenerate_iqr": false
     },
     "hv009": {
       "skew": 0.42,
@@ -71,7 +74,8 @@
       "lower": -1.5,
       "upper": 10.5,
       "n_outliers": 63,
-      "pct_outliers": 0.42
+      "pct_outliers": 0.42,
+      "degenerate_iqr": false
     },
     "hv216": {
       "skew": 0.55,
@@ -81,7 +85,8 @@
       "lower": 0.5,
       "upper": 4.5,
       "n_outliers": 718,
-      "pct_outliers": 4.81
+      "pct_outliers": 4.81,
+      "degenerate_iqr": false
     },
     "hml1": {
       "skew": 0.61,
@@ -91,7 +96,8 @@
       "lower": -4.5,
       "upper": 7.5,
       "n_outliers": 0,
-      "pct_outliers": 0.0
+      "pct_outliers": 0.0,
+      "degenerate_iqr": false
     },
     "hml4": {
       "skew": 3.24,
@@ -101,7 +107,8 @@
       "lower": -17.0,
       "upper": 39.0,
       "n_outliers": 197,
-      "pct_outliers": 1.32
+      "pct_outliers": 1.32,
+      "degenerate_iqr": false
     },
     "Rainfall_2020": {
       "skew": 0.27,
@@ -111,7 +118,8 @@
       "lower": 1004.259,
       "upper": 1428.664,
       "n_outliers": 1092,
-      "pct_outliers": 7.31
+      "pct_outliers": 7.31,
+      "degenerate_iqr": false
     },
     "Precipitation_2020": {
       "skew": 0.35,
@@ -121,7 +129,8 @@
       "lower": 57.688,
       "upper": 164.801,
       "n_outliers": 0,
-      "pct_outliers": 0.0
+      "pct_outliers": 0.0,
+      "degenerate_iqr": false
     },
     "Wet_Days_2020": {
       "skew": 0.17,
@@ -131,7 +140,8 @@
       "lower": 15.823,
       "upper": 17.823,
       "n_outliers": 0,
-      "pct_outliers": 0.0
+      "pct_outliers": 0.0,
+      "degenerate_iqr": false
     },
     "Mean_Temperature_2020": {
       "skew": 0.11,
@@ -141,7 +151,8 @@
       "lower": 15.164,
       "upper": 22.825,
       "n_outliers": 0,
-      "pct_outliers": 0.0
+      "pct_outliers": 0.0,
+      "degenerate_iqr": false
     },
     "Maximum_Temperature_2020": {
       "skew": 0.07,
@@ -151,7 +162,8 @@
       "lower": 19.901,
       "upper": 29.402,
       "n_outliers": 0,
-      "pct_outliers": 0.0
+      "pct_outliers": 0.0,
+      "degenerate_iqr": false
     },
     "Minimum_Temperature_2020": {
       "skew": 0.12,
@@ -161,7 +173,8 @@
       "lower": 10.304,
       "upper": 16.609,
       "n_outliers": 0,
-      "pct_outliers": 0.0
+      "pct_outliers": 0.0,
+      "degenerate_iqr": false
     },
     "Land_Surface_Temperature_2020": {
       "skew": -0.81,
@@ -171,7 +184,8 @@
       "lower": 13.167,
       "upper": 28.705,
       "n_outliers": 128,
-      "pct_outliers": 0.86
+      "pct_outliers": 0.86,
+      "degenerate_iqr": false
     },
     "Day_Land_Surface_Temp_2020": {
       "skew": -0.63,
@@ -181,7 +195,8 @@
       "lower": 17.608,
       "upper": 35.605,
       "n_outliers": 0,
-      "pct_outliers": 0.0
+      "pct_outliers": 0.0,
+      "degenerate_iqr": false
     },
     "Night_Land_Surface_Temp_2020": {
       "skew": -1.14,
@@ -191,7 +206,8 @@
       "lower": 8.405,
       "upper": 21.933,
       "n_outliers": 128,
-      "pct_outliers": 0.86
+      "pct_outliers": 0.86,
+      "degenerate_iqr": false
     },
     "Diurnal_Temperature_Range_2020": {
       "skew": -0.14,
@@ -201,7 +217,8 @@
       "lower": 10.103,
       "upper": 12.508,
       "n_outliers": 129,
-      "pct_outliers": 0.86
+      "pct_outliers": 0.86,
+      "degenerate_iqr": false
     },
     "Enhanced_Vegetation_Index_2020": {
       "skew": -1.85,
@@ -211,7 +228,8 @@
       "lower": 0.287,
       "upper": 0.462,
       "n_outliers": 1137,
-      "pct_outliers": 7.61
+      "pct_outliers": 7.61,
+      "degenerate_iqr": false
     },
     "Aridity_2020": {
       "skew": 0.29,
@@ -221,7 +239,8 @@
       "lower": 13.608,
       "upper": 66.269,
       "n_outliers": 0,
-      "pct_outliers": 0.0
+      "pct_outliers": 0.0,
+      "degenerate_iqr": false
     },
     "PET_2020": {
       "skew": 0.13,
@@ -231,7 +250,8 @@
       "lower": 2.327,
       "upper": 3.317,
       "n_outliers": 0,
-      "pct_outliers": 0.0
+      "pct_outliers": 0.0,
+      "degenerate_iqr": false
     },
     "Frost_Days_2020": {
       "skew": 2.7,
@@ -241,7 +261,8 @@
       "lower": 0.0,
       "upper": 0.0,
       "n_outliers": 2986,
-      "pct_outliers": 19.99
+      "pct_outliers": 19.99,
+      "degenerate_iqr": true
     },
     "UN_Population_Density_2020": {
       "skew": 3.0,
@@ -251,7 +272,8 @@
       "lower": -95.263,
       "upper": 1476.073,
       "n_outliers": 2114,
-      "pct_outliers": 14.15
+      "pct_outliers": 14.15,
+      "degenerate_iqr": false
     },
     "Elevation": {
       "skew": 1.19,
@@ -261,7 +283,8 @@
       "lower": 898.935,
       "upper": 2431.841,
       "n_outliers": 465,
-      "pct_outliers": 3.11
+      "pct_outliers": 3.11,
+      "degenerate_iqr": false
     },
     "Travel_Times": {
       "skew": 0.78,
@@ -271,7 +294,8 @@
       "lower": -51.173,
       "upper": 120.483,
       "n_outliers": 110,
-      "pct_outliers": 0.74
+      "pct_outliers": 0.74,
+      "degenerate_iqr": false
     },
     "Nightlights_Composite": {
       "skew": 3.66,
@@ -281,7 +305,8 @@
       "lower": -0.142,
       "upper": 0.237,
       "n_outliers": 3046,
-      "pct_outliers": 20.39
+      "pct_outliers": 20.39,
+      "degenerate_iqr": false
     },
     "Global_Human_Footprint": {
       "skew": 0.25,
@@ -291,7 +316,8 @@
       "lower": 19.277,
       "upper": 52.276,
       "n_outliers": 77,
-      "pct_outliers": 0.52
+      "pct_outliers": 0.52,
+      "degenerate_iqr": false
     },
     "Growing_Season_Length": {
       "skew": 0.34,
@@ -301,7 +327,8 @@
       "lower": 8.0,
       "upper": 16.0,
       "n_outliers": 0,
-      "pct_outliers": 0.0
+      "pct_outliers": 0.0,
+      "degenerate_iqr": false
     },
     "Irrigation": {
       "skew": 3.65,
@@ -311,7 +338,8 @@
       "lower": -0.229,
       "upper": 0.381,
       "n_outliers": 2901,
-      "pct_outliers": 19.42
+      "pct_outliers": 19.42,
+      "degenerate_iqr": false
     },
     "Livestock_Cattle": {
       "skew": 3.53,
@@ -321,7 +349,8 @@
       "lower": -26.279,
       "upper": 99.534,
       "n_outliers": 1852,
-      "pct_outliers": 12.4
+      "pct_outliers": 12.4,
+      "degenerate_iqr": false
     },
     "Livestock_Goats": {
       "skew": 4.12,
@@ -331,7 +360,8 @@
       "lower": -74.616,
       "upper": 228.01,
       "n_outliers": 352,
-      "pct_outliers": 2.36
+      "pct_outliers": 2.36,
+      "degenerate_iqr": false
     }
   },
   "collinear_pairs_r_ge_0.85": [
@@ -538,27 +568,27 @@
   },
   "pca": {
     "n_features": 30,
-    "k90": 11,
-    "k95": 14,
+    "k90": 12,
+    "k95": 15,
     "first_eigenvalues": [
-      11.296,
-      4.106,
-      2.313,
-      1.745,
-      1.559,
-      1.143,
+      11.576,
+      4.138,
+      2.519,
+      1.747,
+      1.56,
+      1.24,
       1.055,
-      0.928
+      0.929
     ],
     "first_variance_ratios": [
-      0.3895,
-      0.1416,
-      0.0798,
-      0.0602,
-      0.0538,
-      0.0394,
-      0.0364,
-      0.032
+      0.3858,
+      0.1379,
+      0.084,
+      0.0582,
+      0.052,
+      0.0413,
+      0.0352,
+      0.031
     ]
   },
   "skewness_summary": {

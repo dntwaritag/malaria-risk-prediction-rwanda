@@ -1,40 +1,40 @@
 {
   "n_numeric": 30,
-  "max_vif_before": 4389473321023.875,
-  "n_infinite_vif_before": 1,
-  "n_vif_gt10_before": 13,
+  "max_vif_before": 4454599037953.013,
+  "n_infinite_vif_before": 0,
+  "n_vif_gt10_before": 12,
   "top_vif_before": [
     [
       "Maximum_Temperature_2020",
-      4389473321023.9
+      4454599037953.0
     ],
     [
       "Minimum_Temperature_2020",
-      2984492794811.5
+      3028648034546.4
     ],
     [
       "Diurnal_Temperature_Range_2020",
-      539644074935.1
+      547583394415.5
     ],
     [
       "Mean_Temperature_2020",
-      168045.3
+      176313.8
     ],
     [
       "Land_Surface_Temperature_2020",
-      3801.9
+      3823.6
     ],
     [
       "Aridity_2020",
-      2993.5
+      3723.2
     ],
     [
       "Precipitation_2020",
-      1620.6
+      2064.3
     ],
     [
       "Day_Land_Surface_Temp_2020",
-      1322.4
+      1329.4
     ]
   ],
   "dropped": [
@@ -76,12 +76,12 @@
     ],
     [
       "Maximum_Temperature_2020",
-      "VIF=33.4"
+      "VIF=35.6"
     ]
   ],
   "n_dropped": 10,
   "n_kept": 20,
-  "max_vif_after": 7.005440569890904,
+  "max_vif_after": 7.538338370445163,
   "dropped_mi": {
     "Elevation": 0.01449,
     "Land_Surface_Temperature_2020": 0.01617,
