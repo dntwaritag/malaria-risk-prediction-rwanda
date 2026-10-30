@@ -5,6 +5,10 @@ Malaria Indicator Survey (MIS) 2023 has a positive rapid diagnostic test (RDT), 
 demographic and cluster-level climate covariates. The goal is to support targeted allocation of
 bed nets and indoor residual spraying (SDG 3, target 3.3).
 
+> **Best model (pooled out-of-fold, all 179 positives):** regularized logistic regression on household features plus
+> cluster-mean context, PR-AUC 0.050 (5.2x the 0.0096 baseline), ROC-AUC 0.72, lift 2.5 in the top 20%. Boosted trees on the 2020 climate
+> covariates score lower (PR-AUC 0.015 to 0.021). Intervals are wide; see `reports/pooled_evaluation.json`.
+
 > **Honest summary.** Positives are rare (0.96%) and the signal in these covariates is weak.
 > Held-out PR-AUC is 0.013 to 0.020 against a 0.0096 prevalence baseline, and the confidence
 > intervals of the four models overlap. The value of this repository is a defensible,
@@ -116,6 +120,11 @@ Only 58 of 170 clusters contain a positive, one cluster holds 39 of the 179 posi
 testing on all of MIS 2023 (`src/transfer.py`) gives PR-AUC 0.015 to 0.021 and ROC-AUC 0.63 to 0.67 against a 0.0096 baseline,
 a more stable estimate than the 36-positive hold-out. The full report is `docs/report/Assignment3_Phase2.pdf`.
 
+## 4c. Data to download next
+
+CHIRPS rainfall, ERA5-Land humidity/temperature and MODIS EVI/NDVI as monthly lags in buffers around each GPS cluster (priority 1);
+NISR census and district boundaries, RBC district case series (priority 2); DHS 2019-20 and MIS 2017 GPS (priority 3). Details in the report.
+
 ## 5. Repository layout
 
 ```
@@ -126,7 +135,10 @@ src/pipeline_builder.py  grouped split and leakage-free preprocessing/model pipe
 src/diagnostics.py       statistics and the eight figures
 src/evaluation.py        OOF predictions, calibration, weighted metrics, bootstrap CIs
 notebooks/pipeline_execution.ipynb   end-to-end run
-reports/  figures/  docs/            outputs, figures, planning documents
+src/pooled.py            pooled out-of-fold evaluation, cluster-mean features, 2017 augmentation
+src/transfer.py          train 2017, test 2023
+src/cluster_analysis.py  why skill is low (cluster concentration)
+reports/  figures/  docs/  outputs, figures, report (docs/report) and original proposal (docs/proposal)
 ```
 
 ## 6. Reproduce

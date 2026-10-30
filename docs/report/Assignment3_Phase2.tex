@@ -9,16 +9,20 @@
 \usepackage{booktabs,array,tabularx}
 \usepackage{amsmath}
 \usepackage{xurl}
+\usepackage{enumitem}
+\setlist[itemize]{noitemsep, topsep=2pt, partopsep=0pt, parsep=0pt, leftmargin=*}
+\setcitestyle{numbers,square,comma}
 \newcommand{\figdir}{../../figures/}
 \title{Strategy versus Reality in a Leakage Free Preprocessing Pipeline for Malaria Risk Prediction in Rwanda}
 \author{Denys Ntwaritaganzwa \\
   Carnegie Mellon University Africa \\
   \texttt{dntwarit@andrew.cmu.edu} \\
   Code: \url{https://github.com/dntwaritag/malaria-risk-prediction-rwanda}}
+\renewcommand{\topfraction}{0.95}\renewcommand{\bottomfraction}{0.9}\renewcommand{\textfraction}{0.08}\renewcommand{\floatpagefraction}{0.6}\renewcommand{\dblfloatpagefraction}{0.6}\renewcommand{\dbltopfraction}{0.95}
 \begin{document}
 \maketitle
 \begin{abstract}
-We implement and audit a leakage free preprocessing and evaluation pipeline that predicts a positive malaria rapid diagnostic test (RDT) from household, demographic and climate covariates in the 2023 Rwanda Malaria Indicator Survey (MIS). Every planned Phase~1 decision is compared with what the data forced in Phase~2 and backed by a number and a figure. Measured data realities changed eight decisions, including the missing code convention, the treatment of structural missingness, and the winsorizing rule for zero spread features. The matrix grows from $18{,}672\times53$ to $14{,}940\times95$ (train) with no missing cells. Predictive skill is weak: held out PR-AUC is $0.013$ to $0.020$ against a $0.0096$ prevalence baseline. We show that positives are concentrated in a few clusters, and that training on MIS~2017 and testing on all 179 positives of MIS~2023 gives a more stable estimate (PR-AUC $0.015$ to $0.021$).
+We implement and audit a leakage free preprocessing and evaluation pipeline that predicts a positive malaria rapid diagnostic test (RDT) from household, demographic and climate covariates in the 2023 Rwanda Malaria Indicator Survey (MIS). Every planned Phase~1 decision is compared with what the data forced in Phase~2 and backed by a number and a figure; eight decisions changed, including the missing code convention, the treatment of structural missingness and the winsorizing rule for zero spread features. The matrix grows from $18{,}672\times53$ to $14{,}940\times95$ (train) with no missing cells. Positives are rare (0.96\%) and concentrated in a few clusters, so a 36 positive hold out is unreliable. Evaluating every one of the 179 positives out of fold under cluster grouped cross validation, a regularized logistic regression on household features plus cluster mean context reaches PR-AUC $0.050$ (5.2 times the $0.0096$ baseline) and ROC-AUC $0.72$, whereas boosted trees on the 2020 climate covariates reach only $0.015$ to $0.021$. Wide intervals and the next data to acquire are reported. The original project proposal is reproduced in Appendix~A.
 \end{abstract}
 
 \section{Introduction}
@@ -70,6 +74,8 @@ Encoding & Wealth quintile $\{0..4\}$, one hot $\le10$ levels, target encoding f
 Split & Group by cluster, stratify & StratifiedGroupKFold, seed chosen by label balance & Overlap 0; 143/36 positives\\
 Imbalance & Class weights; SMOTE only if needed; threshold on validation & Class weights only; threshold on out-of-fold data (recall target 0.70) & 103.5:1; SMOTE not needed\\
 Calibration and weights & Planned & Platt and isotonic fit on out-of-fold predictions; weighted (\texttt{hv005}) and unweighted metrics & Brier 0.13 $\to$ 0.0094 for logistic (Table~\ref{tab:res})\\
+Model family and features & XGBoost, LightGBM or CatBoost on household plus climate features; logistic as baseline & Regularized logistic on household features plus cluster mean context is best out of fold; climate features lower PR-AUC (0.021 vs 0.041) & Pooled out-of-fold PR-AUC over 179 positives (Table~\ref{tab:pooled})\\
+Evaluation protocol & One 80/20 grouped hold-out & Hold-out kept, but headline numbers are pooled out-of-fold over all 18{,}672 rows & Hold-out has 36 positives from few clusters; one cluster holds 21.8\% of positives\\
 Climate source & CHIRPS, ERA5, MODIS buffer means & DHS 5~km covariates (2020 values) joined by cluster & Not reachable from the build environment; deviation listed in Sec.~\ref{sec:lim}\\
 \bottomrule
 \end{tabularx}
@@ -90,11 +96,56 @@ Twenty pairs reach $|r|\ge0.85$, the strongest being mean temperature with PET (
 \subsection{Transformations and PCA (Figs.~\ref{fig:tf}, \ref{fig:pca})}
 For \texttt{Livestock\_Goats}, log1p reduces skew from 4.12 to $-0.19$ (mean 90.1 to 4.25, sd 79.3 to 0.73); min-max gives mean 0.53, sd 0.15; standardization gives mean 0, sd 1. PCA on the 30 scaled numeric features has leading eigenvalues $11.58, 4.14, 2.52, 1.75, 1.56$ (variance $38.6\%, 13.8\%, 8.4\%, 5.8\%, 5.2\%$); 12 components reach 90\% and 15 reach 95\%. This shows strong redundancy among climate variables, but raw features are retained for interpretability.
 
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.8\textwidth]{\figdir fig1_1_missingness_heatmap.png}
+\caption{Missingness pattern (training rows sorted by pattern) and top missing columns.}\label{fig:miss}
+\end{figure*}
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{\figdir fig1_2_target_distribution.png}
+\caption{Class balance by split (log scale) and age density by test result.}\label{fig:target}
+\end{figure}
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.75\textwidth]{\figdir fig2_1_outlier_boxplots.png}
+\caption{Outlier box plots, raw versus winsorized, for the six features with the most flagged values.}\label{fig:out}
+\end{figure*}
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.6\textwidth]{\figdir fig3_1_correlation_matrix.png}
+\caption{Upper triangle correlation heatmap of transformed numeric training features; boxes mark $|r|\ge0.85$.}\label{fig:corr}
+\end{figure*}
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.8\textwidth]{\figdir fig3_2_collinear_scatterplots.png}
+\caption{Collinear pairs with fitted linear trend (standardized values).}\label{fig:scatter}
+\end{figure*}
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.7\textwidth]{\figdir fig3_3_target_importance.png}
+\caption{Feature to target importance: mutual information and $|$point biserial $r|$ (training data, top 20).}\label{fig:imp}
+\end{figure*}
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{\figdir fig4_1_transformation_grid.png}
+\caption{\texttt{Livestock\_Goats}: raw, log1p, min-max and standardized.}\label{fig:tf}
+\end{figure}
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{\figdir fig5_1_pca_scree_plot.png}
+\caption{PCA scree and cumulative variance with 90\% and 95\% cutoffs.}\label{fig:pca}
+\end{figure}
+
+
+
+
+
 \section{Leakage Free Architecture}
 All steps are inside \texttt{Pipeline} and \texttt{ColumnTransformer} objects (sentinel recoder, winsorizers, imputers with indicators, log1p, scaler, rare level grouping, one hot and ordinal encoders, optional collinearity screen). Training skewness decides each column's branch, and every threshold, median, mean, standard deviation and capping bound is learned from \texttt{X\_train} only and applied unchanged to test data. Cross validation uses cluster grouped, label stratified folds. Calibrators and operating thresholds are fit on out-of-fold predictions. The second malaria test, test-process variables, modelled malaria columns, anemia and treatment variables, identifiers are excluded as leakage, and the survey weight is used only in evaluation, never as a feature.
 
-\section{Model Results and Why They Are Weak}
-\textbf{Models.} Regularized logistic regression, random forest, LightGBM \cite{ke2017} and XGBoost \cite{chen2016} with class weights; probabilities are calibrated with Platt scaling \cite{platt1999}. Table~\ref{tab:res} gives held out results with cluster bootstrap 95\% intervals for PR-AUC. Out-of-fold PR-AUC (5-fold grouped) is 0.0455 for XGBoost, 0.0393 LightGBM, 0.0289 logistic and 0.0275 random forest, so XGBoost is selected. Its test PR-AUC (0.0203; weighted 0.0193) is about twice the baseline, but its interval $[0.005, 0.064]$ overlaps those of all other models, so it is not significantly better than LightGBM.
+\section{Model Results, Diagnosis and Improvement}
+\textbf{Hold-out results.} Candidate models are regularized logistic regression, random forest, LightGBM \cite{ke2017} and XGBoost \cite{chen2016}, all with class weights; probabilities are calibrated with Platt scaling \cite{platt1999}. Table~\ref{tab:res} gives the 20\% cluster grouped hold-out. XGBoost has the best hold-out PR-AUC (0.0203; weighted 0.0193; out-of-fold 0.0455), but with 36 positives its 95\% interval $[0.005, 0.064]$ overlaps every other model.
 
 \begin{table}[t]
 \centering\small
@@ -110,62 +161,146 @@ XGBoost & .0203 & .643 & .0096 & .64\\
 Baseline & .0096 & .500 & & \\
 \bottomrule
 \end{tabular}
-\caption{Held out test (3{,}732 rows, 36 positives), Platt calibrated, unweighted. Weighted PR-AUC: .0130, .0129, .0150, .0193.}
+\caption{Hold-out test (3{,}732 rows, 36 positives), Platt calibrated, unweighted. Weighted PR-AUC: .0130, .0129, .0150, .0193.}
 \label{tab:res}
 \end{table}
 
-\textbf{Diagnosis.} The weak scores are not a coding error: out-of-fold and test ROC-AUC differ (0.75 vs 0.64) because grouped splits remove cluster memorization. The cause is the data. Only 58 of 170 clusters contain any positive; one cluster holds 39 of 179 positives (21.8\%) and the top three hold 35.8\%. Prevalence by province code ranges from 0.35\% to 2.08\%, and by age from 0.68\% to 1.22\%. A 36 positive test set therefore reflects a handful of clusters. Predicting at cluster level (170 clusters, 5-fold $\times$ 10 repeats) gives ROC-AUC only $0.52\pm0.03$ (logistic) and $0.58\pm0.03$ (random forest), so the available covariates barely explain where outbreaks occur.
+\textbf{Diagnosis.} The weak scores are not a coding error. Out-of-fold and hold-out ROC-AUC differ (0.75 vs 0.64) because grouped splits remove cluster memorization, and the cause is the data. Only 58 of 170 clusters contain any positive; one cluster holds 39 of 179 positives (21.8\%) and the top three hold 35.8\%. Prevalence by province code ranges from 0.35\% to 2.08\%, by age from 0.68\% to 1.22\%. A 36 positive hold-out therefore reflects a handful of clusters. Climate covariates are constant within a cluster, so a flexible model can memorize the 170 distinct climate profiles, which does not transfer to unseen clusters. A model predicting which clusters contain a positive reaches ROC-AUC only $0.52\pm0.03$ (logistic) and $0.58\pm0.03$ (random forest).
 
-\textbf{More powerful evaluation.} MIS~2017 has 1{,}765 positives. Training on 2017 household features and testing on all 18{,}672 people of MIS~2023 (179 positives, disjoint clusters, no leakage) gives PR-AUC $0.0208$ (logistic, 95\% CI $[0.008, 0.040]$, ROC $0.673$), $0.0174$ (LightGBM), $0.0189$ (XGBoost) and $0.0152$ (random forest), all above the $0.0096$ baseline. This is the more reliable estimate of generalization and shows that household information gives about two fold lift over chance, not strong discrimination.
+\textbf{Improved evaluation and model.} To use all 179 positives, every person is predicted once by a model that never saw their cluster (5-fold cluster grouped, label stratified, pooled over 18{,}672 rows; Table~\ref{tab:pooled}). Five configurations were fixed in advance. Dropping the climate covariates and keeping 30 household features raises logistic PR-AUC from 0.021 to 0.041; adding cluster mean age, wealth score, household size, rooms and nets (label free context) raises it to \textbf{0.050} (ROC-AUC 0.72, weighted PR-AUC 0.048; the top 20\% highest scores capture 49\% of positives, a lift of 2.5). Tree models do not benefit, and adding all of MIS~2017 (1{,}765 positives, no climate) lowers logistic PR-AUC to 0.016, so survey round shift outweighs the extra positives. Training on 2017 alone and testing on all of 2023 gives PR-AUC 0.015 to 0.021. All intervals are wide (best model $[0.009, 0.137]$) and the five configurations were compared on the same data, so some optimism remains; the ranking of logistic over boosted trees is suggestive, not proven.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{llccc}
+\toprule
+Config & Model & PR-AUC & ROC & Lift@20\%\\
+\midrule
+A all feats & Logistic & .0211 & .690 & 2.18\\
+A all feats & XGBoost & .0162 & .654 & 1.79\\
+B household & Logistic & .0408 & .717 & 2.57\\
+B household & XGBoost & .0228 & .693 & 2.26\\
+C B + cluster means & Logistic & \textbf{.0498} & .717 & 2.46\\
+C B + cluster means & LightGBM & .0189 & .673 & 2.09\\
+D B + MIS 2017 & Logistic & .0159 & .639 & 1.90\\
+D B + MIS 2017 & LightGBM & .0192 & .676 & 1.87\\
+\bottomrule
+\end{tabular}
+\caption{Pooled out-of-fold results over all 179 MIS 2023 positives (baseline PR-AUC 0.0096). Selected rows; all 15 model and configuration pairs are in \texttt{reports/pooled\_evaluation.json}.}
+\label{tab:pooled}
+\end{table}
 
 \section{Limitations and Supervisor Feedback}
 \label{sec:lim}
-We address four review points. (1) GPS displacement (urban up to 2~km, rural up to 5~km) is mitigated, not removed: climate values are 5~km cluster covariates for 2020, not buffer means from CHIRPS, ERA5 or MODIS (not reachable from the build environment), and are not matched to the interview month. (2) Normalized \texttt{hv005} weights are used in evaluation and both weighted and unweighted results are reported; weights are not used in training. (3) Calibration uses only out-of-fold predictions. (4) VIF reduction is restricted to the linear branch. Further limits: 179 positives in total, a single survey year for training the main model, and results that describe this survey only.
+We address four review points. (1) GPS displacement (urban up to 2~km, rural up to 5~km) is mitigated, not removed: climate values are 5~km cluster covariates for 2020, not buffer means from CHIRPS, ERA5 or MODIS (not reachable from the build environment), and are not matched to the interview month. (2) Normalized \texttt{hv005} weights are used in evaluation and both weighted and unweighted results are reported; weights are not used in training. (3) Calibration uses only out-of-fold predictions. (4) VIF reduction is restricted to the linear branch. Further limits: 179 positives in total, one survey round per model, and results that describe this survey only.
+
+\section{Additional Data to Acquire}
+The largest remaining gap is that climate enters as one 2020 value per cluster. Table~\ref{tab:data} lists the next sources in priority order; none was reachable from the build environment, so each must be requested or downloaded by the project owner.
+
+\begin{table*}[t]
+\centering\footnotesize
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.2cm}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{1.6cm}}
+\toprule
+Data & Source & Purpose and how it fixes a gap & Priority\\
+\midrule
+Monthly rainfall, 1 to 3 month lags, buffer means (5 km) around each GPS cluster & CHIRPS \cite{funk2015}, Climate Hazards Center, free download or Google Earth Engine & Matches climate to the interview month (\texttt{hv006}, \texttt{hv007}) instead of a 2020 constant; addresses the GPS displacement feedback & 1\\
+Humidity, dewpoint, temperature & ERA5-Land \cite{munozsabater2021}, Copernicus Climate Data Store (free account) & Mosquito survival drivers beyond rainfall; monthly lags per cluster buffer & 1\\
+Vegetation (EVI, NDVI), 16 day & MODIS MOD13Q1 v061 \cite{didan2020}, NASA LP DAAC (free Earthdata login) & Breeding habitat proxy, lagged per cluster & 1\\
+Population denominators and district boundaries & NISR census 2022 \cite{nisr2022}; district shapefiles (NISR or GADM) & District roll-up of cluster risk for planning; exposure normalization & 2\\
+Monthly district malaria cases, 2014 to 2024 & Rwanda Biomedical Centre DHMIS bulletin \cite{rbc2024}; full series by formal request & Enables the time series early warning in the original proposal; independent validation of cluster risk & 2\\
+Rwanda DHS 2019--20 (PR, GE, GC) & DHS Program, same account (new request) & Third survey round (1.79\% RDT prevalence) for temporal validation & 3\\
+Housing and net coverage from MIS 2017 with GPS & DHS Program (GPS for 2017 must be requested separately) & Unlocks climate features for the 2017 round and a true pooled model & 3\\
+\bottomrule
+\end{tabularx}
+\caption{Data to download next, in priority order.}
+\label{tab:data}
+\end{table*}
 
 \section{Conclusion}
-The pipeline is leakage free and fully auditable, but malaria positivity in MIS~2023 is dominated by a few clusters that household and coarse climate covariates cannot locate. The honest finding is a modest lift (about two times baseline) with wide intervals; stronger climate data at survey time and cluster level targets are the next steps.
+The pipeline is leakage free and fully auditable, but malaria positivity in MIS~2023 is dominated by a few clusters that household and coarse climate covariates only partly locate. The honest finding is a modest but real lift: the best out-of-fold model (regularized logistic regression on household features plus cluster context) ranks positives about five times better than chance in PR-AUC terms, with wide intervals. Matching climate to the interview month at cluster buffers (Table~\ref{tab:data}) is the next step.
 
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.92\textwidth]{\figdir fig1_1_missingness_heatmap.png}
-\caption{Missingness pattern (training rows sorted by pattern) and top missing columns.}\label{fig:miss}
-\end{figure*}
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{\figdir fig1_2_target_distribution.png}
-\caption{Class balance by split (log scale) and age density by test result.}\label{fig:target}
-\end{figure}
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.9\textwidth]{\figdir fig2_1_outlier_boxplots.png}
-\caption{Outlier box plots, raw versus winsorized, for the six features with the most flagged values.}\label{fig:out}
-\end{figure*}
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.78\textwidth]{\figdir fig3_1_correlation_matrix.png}
-\caption{Upper triangle correlation heatmap of transformed numeric training features; boxes mark $|r|\ge0.85$.}\label{fig:corr}
-\end{figure*}
-\begin{figure*}[t]
-\centering
-\includegraphics[width=\textwidth]{\figdir fig3_2_collinear_scatterplots.png}
-\caption{Collinear pairs with fitted linear trend (standardized values).}\label{fig:scatter}
-\end{figure*}
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.85\textwidth]{\figdir fig3_3_target_importance.png}
-\caption{Feature to target importance: mutual information and $|$point biserial $r|$ (training data, top 20).}\label{fig:imp}
-\end{figure*}
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{\figdir fig4_1_transformation_grid.png}
-\caption{\texttt{Livestock\_Goats}: raw, log1p, min-max and standardized.}\label{fig:tf}
-\end{figure}
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{\figdir fig5_1_pca_scree_plot.png}
-\caption{PCA scree and cumulative variance with 90\% and 95\% cutoffs.}\label{fig:pca}
-\end{figure}
+\clearpage
+\appendix
+\section{Original Project Proposal}
+\label{app:proposal}
+This appendix reproduces the original proposal text unchanged, including its original scope (district level monthly early warning from surveillance data). Section~\ref{sec:lim} and Table~\ref{tab:log} explain how and why the scope changed to individual level RDT classification.
 
-\bibliography{references}
-\bibliographystyle{acl_natbib}
+\subsection*{Climate Informed Machine Learning for District Level Malaria Early Warning in Rwanda}
+\textit{Denys Ntwaritaganzwa, MS EAI, Carnegie Mellon University Africa.}
+
+\subsection*{Abstract}
+Malaria remains a leading cause of morbidity in Rwanda despite gains achieved through vector control and treatment programs. District level surveillance recorded through the Rwanda Biomedical Centre Health Management Information System is used mainly to describe past trends rather than anticipate surges, and annual net and spraying allocations ignore short term climate signals. This proposal presents a climate informed machine learning system that forecasts district level malaria risk one to two months ahead across three ordinal levels, normal, elevated, and epidemic, so that officials can position bed nets, spray teams, and drug stocks before, rather than after, a seasonal peak. The system frames prediction as multiclass classification, in which gradient boosted trees and a multinomial logistic regression baseline learn from lagged rainfall, temperature, humidity, vegetation wetness, and case history. Three pilot districts are selected by historical case burden and rainfall driven variability, with additional districts held out to test regional transferability. Validation follows a temporal split that holds out complete malaria seasons and is assessed with balanced accuracy, macro F1 score, and a lead time detection rate, benchmarked against a seasonal persistence baseline. This work directly supports Sustainable Development Goal 3, specifically the target of ending the epidemics of malaria, by translating openly available climate, vegetation, and surveillance data into an operational early warning tool for a resource constrained health system.
+
+\subsection{Introduction and SDG Relevance}
+Malaria continues to threaten public health in Rwanda even though control programs have driven major reductions in transmission over the past decade \cite{mohrwanda2019}. A public health bulletin covering 2014 through 2024 shows that incidence and severity among children under five and pregnant women have fluctuated rather than declined steadily \cite{rbc2024}. Surveillance through the District Health Management Information System is compiled after cases have already occurred, so district teams receive information that describes the past rather than a signal that anticipates the near future. Rainfall, temperature, humidity, and vegetation wetness are documented drivers of Anopheles mosquito breeding and Plasmodium falciparum development, and recent studies across Africa show that climate covariates carry predictive information for malaria months ahead of an outbreak \cite{martineau2022,nkiruka2021,khan2024}. This project combines openly available satellite rainfall, temperature, humidity, and vegetation records with historical district level surveillance data to build a machine learning early warning system for Rwanda, turning existing open data into a forecasting tool that district teams can use to plan interventions before, rather than after, a seasonal rise in cases.
+
+\subsection{Selected SDG}
+SDG 3, Good Health and Well Being, target 3.3, calls for ending the epidemics of malaria by 2030. The proposed system forecasts district level malaria risk so the national malaria program can allocate long lasting insecticidal nets, indoor residual spraying teams, and antimalarial drug stocks to the districts and months where an elevated or epidemic case load is expected, supporting progress toward elimination rather than only measuring it after the fact.
+
+\subsection{Refined Problem Statement}
+The Ministry of Health currently monitors malaria through retrospective descriptive statistics drawn from the District Health Management Information System, aggregated by district and year \cite{rbc2024}. This accurately documents what happened but does not forecast what is likely to happen. Districts with a historically disproportionate case burden are also subject to strong rainfall driven transmission cycles, yet planning cycles for net distribution and spraying are set annually rather than adjusted to short term climate signals, so districts can be under supplied ahead of a severe season or over resourced ahead of a mild one. The deficiency is not a lack of surveillance data but an absence of a predictive layer that converts existing rainfall, temperature, humidity, vegetation, and case history into a forecast with enough lead time, typically one to two months, for procurement and distribution logistics to respond. The initial pilot targets the three districts with the highest documented case burden and the strongest rainfall driven case variability reported in the national malaria bulletin \cite{rbc2024}, and additional districts spanning other agroecological zones will be scored with the same trained models to test regional transferability before any broader rollout is considered. Without such a layer, preventable cases concentrated among children under five and pregnant women continue to occur even where nets, drugs, and spraying capacity already exist within the health system.
+
+\subsection{AI Task Formulation}
+The prediction task is a monthly, district level ordinal classification problem. For district $d$ and target month $t$, let $Y(d,t)$ take the value zero for normal incidence, one for elevated incidence, and two for epidemic incidence, defined respectively as below the historical seventy fifth percentile, between the seventy fifth and ninetieth percentile, and above the ninetieth percentile for that calendar month. This extends the above versus below median formulation used in prior work \cite{martineau2022} with an epidemic tier that logistics planners can act on directly. The feature vector $X(d,t)$ combines the most recent one to three months of rainfall, temperature, humidity, and vegetation wetness observations, the district's own case counts from the previous one to three months, and calendar month as a categorical feature to capture residual seasonality. The task is supervised multiclass classification, $f: X \rightarrow Y$, trained separately for lead times of one and two months. A multinomial logistic regression baseline with L2 regularization is compared against a gradient boosted tree ensemble, since gradient boosted trees achieved the highest reported accuracy among classifiers compared in a recent malaria study \cite{khan2024} and natively support multiclass outputs. Hyperparameter tuning uses nested cross validation with a chronological split so no future month predicts an earlier one, and the two most recent complete malaria seasons are held out as a final test set.
+
+\subsection{Initial Data Sources}
+\begin{itemize}
+\item Rwanda Biomedical Centre DHMIS, via the RBC Public Health Bulletin: monthly and yearly malaria case counts, deaths, and severity by district, 2014 through 2024 \cite{rbc2024}. \url{https://rbc.gov.rw/publichealthbulletin/}
+\item WHO Global Health Observatory and World Malaria Report Rwanda country profile, for cross checking national trends \cite{who2024}. \url{https://www.who.int/publications/m/item/malaria-2024-rwa-country-profile}
+\item CHIRPS rainfall data, Climate Hazards Center, UC Santa Barbara: daily gridded rainfall at 0.05 degree resolution, 1981 to near present \cite{funk2015}. \url{https://www.chc.ucsb.edu/data/chirps}
+\item CHIRTS daily temperature dataset from the same center, accessed with the same retrieval tools. \url{https://www.chc.ucsb.edu/data}
+\item ERA5 Land hourly reanalysis, Copernicus Climate Data Store: relative humidity and dewpoint temperature, which influence adult mosquito survival beyond rainfall alone \cite{munozsabater2021}. \url{https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land}
+\item MODIS sixteen day vegetation index product, NASA Land Processes Distributed Active Archive Center: a proxy for surface water accumulation and breeding habitat \cite{didan2020}. \url{https://lpdaac.usgs.gov/products/mod13q1v061/}
+\item NISR Fifth Population and Housing Census, for district population denominators \cite{nisr2022}. \url{https://statistics.gov.rw/}
+\end{itemize}
+Full monthly case series for all thirty districts, beyond the aggregated bulletin figures used here, will require a formal request to the Rwanda Biomedical Centre.
+
+\subsection{Expected Challenges}
+\begin{itemize}
+\item Short historical record and possible reporting changes in the DHMIS over time: eleven years of monthly data limits sample size, so districts will be pooled by agroecological zone before specializing per district, and national totals will be cross checked against WHO figures \cite{who2024}.
+\item Coarse climate grid relative to district boundaries and class imbalance across the three risk levels: address with area weighted averaging of pixels per boundary and with balanced class weights, reporting balanced accuracy and macro F1 rather than raw accuracy.
+\item Cross border movement, insecticide resistance, and past intervention timing, including spraying and net distribution: none are yet available as structured records, so they are treated as residual error in this pilot, with intervention history to be requested from the Malaria and Other Parasitic Diseases Division for later use as a covariate.
+\item Limited district connectivity: run a lightweight, centralized monthly scoring script rather than a real time streaming system.
+\end{itemize}
+
+\subsection{Preliminary Success Metrics}
+Performance is measured with balanced accuracy, macro F1 score, and area under the ROC curve at each lead time, compared against a seasonal persistence baseline that repeats the historical class for each calendar month. An operational lead time detection rate, defined as the proportion of elevated and epidemic months correctly flagged at least one month before onset, will be reported alongside these conventional metrics since it more directly reflects the reduction in stockout risk that the system is intended to support. A preliminary target of seventy five percent balanced accuracy at a one month lead is proposed, to be refined once exploratory analysis of the actual class balance and noise level is complete. Predicted probabilities will also be checked for calibration with a reliability plot, and a short structured feedback session with malaria program staff will assess the usability of the forecast bulletin format.
+
+\subsection{Project Timeline and Deployment Resources}
+\begin{itemize}
+\item Weeks one to four: problem refinement, literature review, data acquisition across all sources, district boundary mapping, and cleaning of surveillance and climate records.
+\item Weeks five to seven: exploratory analysis, lag correlation between covariates and case counts, and development of the multinomial logistic regression baseline.
+\item Weeks eight to ten: gradient boosted tree model, nested cross validation, hyperparameter tuning, and held out evaluation against the persistence baseline, with the final days of week ten reserved as a contingency buffer to revisit model choice if performance does not clearly exceed the baseline.
+\item Weeks eleven and twelve: prototype monthly bulletin, packaging of the scoring script, documentation, and final presentation.
+\end{itemize}
+Deployment resources are entirely open source: Python with scikit learn and XGBoost for modeling, retrieval clients for the climate and vegetation archives listed above, geopandas for district boundary handling, a lightweight SQLite database for monthly features, Docker for packaging the scoring script, and a scheduled monthly job to regenerate the bulletin. The extracted dataset is small enough to train on a standard laptop, and a future pilot could run on existing Ministry of Health infrastructure or a modest cloud instance to keep retraining costs low.
+
+\subsection*{Limitations}
+This pilot uses a single national surveillance stream and openly available gridded climate and vegetation data, so it cannot yet capture cross border population movement, vector insecticide resistance trends, or the timing of past indoor spraying and net distribution campaigns, all of which independently affect malaria incidence and are not currently available to this project as structured historical records. The eleven year monthly record available per district is short by contemporary machine learning standards, which restricts model complexity and requires cautious interpretation of accuracy figures until more years of data accumulate. Predictions are generated at district resolution and are not intended to guide clinical decisions for individual patients. The coarse resolution of the climate grid relative to district boundaries also introduces averaging error that finer resolution satellite products could reduce in future work.
+
+\subsection*{Ethics Statement}
+All data sources proposed for this project are aggregate and publicly released, so no individual patient records are accessed and no additional informed consent process is required beyond what each data provider already applies. Because the output is a probabilistic forecast intended to support, not replace, expert judgment within the national malaria program, the system will present uncertainty alongside each prediction and will be described to end users as decision support rather than an automated allocation mechanism, reducing the risk that a false negative forecast leads to under preparation in an at risk district. Any future extension toward facility level data or historical intervention records would require explicit data sharing agreements with the Rwanda Biomedical Centre and adherence to applicable data protection law.
+
+
+\section*{References}
+\begin{thebibliography}{99}\small
+\bibitem{habyarimana2020} F. Habyarimana and S. Ramroop, ``Prevalence and risk factors associated with malaria among children aged six months to 14 years old in Rwanda: Evidence from 2017 Rwanda Malaria Indicator Survey,'' \textit{Int. J. Environ. Res. Public Health}, vol. 17, no. 21, p. 7975, 2020, doi: 10.3390/ijerph17217975.
+\bibitem{pedregosa2011} F. Pedregosa \textit{et al.}, ``Scikit-learn: Machine learning in Python,'' \textit{J. Mach. Learn. Res.}, vol. 12, pp. 2825--2830, 2011.
+\bibitem{dhsguide} The DHS Program, ``Guide to DHS statistics: Prevalence of malaria in children,'' ICF, Rockville, MD, USA. [Online]. Available: \url{https://dhsprogram.com/data/Guide-to-DHS-Statistics/}
+\bibitem{little1988} R. J. A. Little, ``A test of missing completely at random for multivariate data with missing values,'' \textit{J. Amer. Statist. Assoc.}, vol. 83, no. 404, pp. 1198--1202, 1988.
+\bibitem{benjamini1995} Y. Benjamini and Y. Hochberg, ``Controlling the false discovery rate: A practical and powerful approach to multiple testing,'' \textit{J. Roy. Statist. Soc. Ser. B}, vol. 57, no. 1, pp. 289--300, 1995.
+\bibitem{ke2017} G. Ke \textit{et al.}, ``LightGBM: A highly efficient gradient boosting decision tree,'' in \textit{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)}, vol. 30, 2017.
+\bibitem{chen2016} T. Chen and C. Guestrin, ``XGBoost: A scalable tree boosting system,'' in \textit{Proc. 22nd ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining}, 2016, pp. 785--794.
+\bibitem{platt1999} J. C. Platt, ``Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods,'' in \textit{Advances in Large Margin Classifiers}, A. J. Smola \textit{et al.}, Eds. Cambridge, MA, USA: MIT Press, 1999, pp. 61--74.
+\bibitem{funk2015} C. Funk \textit{et al.}, ``The climate hazards infrared precipitation with stations---a new environmental record for monitoring extremes,'' \textit{Sci. Data}, vol. 2, Art. no. 150066, 2015, doi: 10.1038/sdata.2015.66.
+\bibitem{munozsabater2021} J. Mu\~noz-Sabater \textit{et al.}, ``ERA5-Land: A state-of-the-art global reanalysis dataset for land applications,'' \textit{Earth Syst. Sci. Data}, vol. 13, no. 9, pp. 4349--4383, 2021, doi: 10.5194/essd-13-4349-2021.
+\bibitem{didan2020} K. Didan, ``MODIS/Terra vegetation indices 16-day L3 global 250 m SIN grid, version 061,'' NASA EOSDIS Land Processes DAAC, 2020, doi: 10.5067/MODIS/MOD13Q1.061.
+\bibitem{rbc2024} Rwanda Biomedical Centre, ``Malaria incidence and death rates among under five children (2014 to 2024) and pregnant women (2018 to 2023) in Rwanda,'' \textit{RBC Public Health Bulletin}, 2024. [Online]. Available: \url{https://rbc.gov.rw/publichealthbulletin/articles/read/173/}
+\bibitem{nisr2022} National Institute of Statistics of Rwanda, ``Fifth Population and Housing Census, 2022,'' NISR, Kigali, Rwanda, 2022. [Online]. Available: \url{https://statistics.gov.rw/}
+\bibitem{mohrwanda2019} Rwanda Ministry of Health, ``Rwanda registers declined malaria cases in 2018, WHO report,'' News, 2019. [Online]. Available: \url{https://www.moh.gov.rw/news-detail/rwanda-registers-declined-malaria-cases-in-2018-who-report}
+\bibitem{martineau2022} P. Martineau \textit{et al.}, ``Predicting malaria outbreaks from sea surface temperature variability up to nine months ahead in Limpopo, South Africa, using machine learning,'' \textit{Front. Public Health}, vol. 10, Art. no. 962377, 2022, doi: 10.3389/fpubh.2022.962377.
+\bibitem{nkiruka2021} O. Nkiruka, R. Prasad, and O. Clement, ``Prediction of malaria incidence using climate variability and machine learning,'' \textit{Informat. Med. Unlocked}, vol. 22, Art. no. 100508, 2021, doi: 10.1016/j.imu.2020.100508.
+\bibitem{khan2024} O. Khan, J. O. Ajadi, and M. P. Hossain, ``Predicting malaria outbreak in The Gambia using machine learning techniques,'' \textit{PLOS ONE}, vol. 19, no. 5, Art. no. e0299386, 2024, doi: 10.1371/journal.pone.0299386.
+\bibitem{who2024} World Health Organization, ``Malaria 2024 Rwanda country profile,'' Global Malaria Programme, 2024. [Online]. Available: \url{https://www.who.int/publications/m/item/malaria-2024-rwa-country-profile}
+\end{thebibliography}
 \end{document}

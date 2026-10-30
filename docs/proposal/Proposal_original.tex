@@ -1,0 +1,128 @@
+% This must be in the first 5 lines to tell arXiv to use pdfLaTeX, which is strongly recommended.
+\pdfoutput=1
+% In particular, the hyperref package requires pdfLaTeX in order to break URLs across lines.
+
+\documentclass[11pt]{article}
+
+% Final version: the review option is intentionally omitted here so that
+% line numbers and the anonymous review banner do not appear in the submitted copy.
+\usepackage{EACL2023}
+
+% Allows long URLs in the reference list to break at any character rather
+% than overflowing the column width, since hyperref's default url handling
+% only breaks at a limited set of characters.
+\usepackage{xurl}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+
+% For proper rendering and hyphenation of words containing Latin characters (including in bib files)
+\usepackage[T1]{fontenc}
+
+% This assumes your files are encoded as UTF8
+\usepackage[utf8]{inputenc}
+
+% The assignment prohibits any hyphen character in the visible proposal
+% prose. LaTeX's automatic line break hyphenation would silently introduce
+% hyphen characters that were never typed in the source, so automatic
+% hyphenation is disabled entirely here. The tolerance and emergencystretch
+% settings loosen inter word spacing slightly to compensate, so paragraphs
+% still justify cleanly without needing to split words.
+\usepackage[none]{hyphenat}
+\tolerance=9999
+\emergencystretch=3em
+
+% Improves the layout of the manuscript and saves some space.
+\usepackage{microtype}
+
+% Improves the aesthetics of text in the typewriter font.
+\usepackage{inconsolata}
+
+% The EACL2023 style loads natbib configured for author year citations by
+% default. The assignment requires IEEE style citations, so this line
+% reconfigures natbib's existing cite command to render numeric, bracketed,
+% comma separated citations, for example [1] or [2, 3], instead, without
+% altering any other part of the supplied template.
+\setcitestyle{numbers,square,comma}
+
+% Tightens list spacing so bulleted content (data sources, challenges) does
+% not consume more vertical space than the prose sections. This is a spacing
+% adjustment only, not a manipulation of margins, font size, or page geometry.
+\usepackage{enumitem}
+\setlist[itemize]{noitemsep, topsep=2pt, partopsep=0pt, parsep=0pt, leftmargin=*}
+
+\title{Climate Informed Machine Learning for District Level Malaria Early Warning in Rwanda}
+
+\author{Denys Ntwaritaganzwa \\
+  MS EAI \\
+  Carnegie Mellon University Africa \\
+  \texttt{dntwarit@andrew.cmu.edu}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Malaria remains a leading cause of morbidity in Rwanda despite gains achieved through vector control and treatment programs. District level surveillance recorded through the Rwanda Biomedical Centre Health Management Information System is used mainly to describe past trends rather than anticipate surges, and annual net and spraying allocations ignore short term climate signals. This proposal presents a climate informed machine learning system that forecasts district level malaria risk one to two months ahead across three ordinal levels, normal, elevated, and epidemic, so that officials can position bed nets, spray teams, and drug stocks before, rather than after, a seasonal peak. The system frames prediction as multiclass classification, in which gradient boosted trees and a multinomial logistic regression baseline learn from lagged rainfall, temperature, humidity, vegetation wetness, and case history. Three pilot districts are selected by historical case burden and rainfall driven variability, with additional districts held out to test regional transferability. Validation follows a temporal split that holds out complete malaria seasons and is assessed with balanced accuracy, macro F1 score, and a lead time detection rate, benchmarked against a seasonal persistence baseline. This work directly supports Sustainable Development Goal 3, specifically the target of ending the epidemics of malaria, by translating openly available climate, vegetation, and surveillance data into an operational early warning tool for a resource constrained health system.
+\end{abstract}
+
+\section{Introduction and SDG Relevance}
+Malaria continues to threaten public health in Rwanda even though control programs have driven major reductions in transmission over the past decade \cite{mohrwanda2019}. A public health bulletin covering 2014 through 2024 shows that incidence and severity among children under five and pregnant women have fluctuated rather than declined steadily \cite{rbc2024}. Surveillance through the District Health Management Information System is compiled after cases have already occurred, so district teams receive information that describes the past rather than a signal that anticipates the near future. Rainfall, temperature, humidity, and vegetation wetness are documented drivers of Anopheles mosquito breeding and Plasmodium falciparum development, and recent studies across Africa show that climate covariates carry predictive information for malaria months ahead of an outbreak \cite{martineau2022,nkiruka2021,khan2024}. This project combines openly available satellite rainfall, temperature, humidity, and vegetation records with historical district level surveillance data to build a machine learning early warning system for Rwanda, turning existing open data into a forecasting tool that district teams can use to plan interventions before, rather than after, a seasonal rise in cases.
+
+\section{Selected SDG}
+SDG 3, Good Health and Well Being, target 3.3, calls for ending the epidemics of malaria by 2030. The proposed system forecasts district level malaria risk so the national malaria program can allocate long lasting insecticidal nets, indoor residual spraying teams, and antimalarial drug stocks to the districts and months where an elevated or epidemic case load is expected, supporting progress toward elimination rather than only measuring it after the fact.
+
+\section{Refined Problem Statement}
+The Ministry of Health currently monitors malaria through retrospective descriptive statistics drawn from the District Health Management Information System, aggregated by district and year \cite{rbc2024}. This accurately documents what happened but does not forecast what is likely to happen. Districts with a historically disproportionate case burden are also subject to strong rainfall driven transmission cycles, yet planning cycles for net distribution and spraying are set annually rather than adjusted to short term climate signals, so districts can be under supplied ahead of a severe season or over resourced ahead of a mild one. The deficiency is not a lack of surveillance data but an absence of a predictive layer that converts existing rainfall, temperature, humidity, vegetation, and case history into a forecast with enough lead time, typically one to two months, for procurement and distribution logistics to respond. The initial pilot targets the three districts with the highest documented case burden and the strongest rainfall driven case variability reported in the national malaria bulletin \cite{rbc2024}, and additional districts spanning other agroecological zones will be scored with the same trained models to test regional transferability before any broader rollout is considered. Without such a layer, preventable cases concentrated among children under five and pregnant women continue to occur even where nets, drugs, and spraying capacity already exist within the health system.
+
+\section{AI Task Formulation}
+The prediction task is a monthly, district level ordinal classification problem. For district $d$ and target month $t$, let $Y(d,t)$ take the value zero for normal incidence, one for elevated incidence, and two for epidemic incidence, defined respectively as below the historical seventy fifth percentile, between the seventy fifth and ninetieth percentile, and above the ninetieth percentile for that calendar month. This extends the above versus below median formulation used in prior work \cite{martineau2022} with an epidemic tier that logistics planners can act on directly. The feature vector $X(d,t)$ combines the most recent one to three months of rainfall, temperature, humidity, and vegetation wetness observations, the district's own case counts from the previous one to three months, and calendar month as a categorical feature to capture residual seasonality. The task is supervised multiclass classification, $f: X \rightarrow Y$, trained separately for lead times of one and two months. A multinomial logistic regression baseline with L2 regularization is compared against a gradient boosted tree ensemble, since gradient boosted trees achieved the highest reported accuracy among classifiers compared in a recent malaria study \cite{khan2024} and natively support multiclass outputs. Hyperparameter tuning uses nested cross validation with a chronological split so no future month predicts an earlier one, and the two most recent complete malaria seasons are held out as a final test set.
+
+\section{Initial Data Sources}
+\begin{itemize}
+\item Rwanda Biomedical Centre DHMIS, via the RBC Public Health Bulletin: monthly and yearly malaria case counts, deaths, and severity by district, 2014 through 2024 \cite{rbc2024}. \url{https://rbc.gov.rw/publichealthbulletin/}
+\item WHO Global Health Observatory and World Malaria Report Rwanda country profile, for cross checking national trends \cite{who2024}. \url{https://www.who.int/publications/m/item/malaria-2024-rwa-country-profile}
+\item CHIRPS rainfall data, Climate Hazards Center, UC Santa Barbara: daily gridded rainfall at 0.05 degree resolution, 1981 to near present \cite{funk2015}. \url{https://www.chc.ucsb.edu/data/chirps}
+\item CHIRTS daily temperature dataset from the same center, accessed with the same retrieval tools. \url{https://www.chc.ucsb.edu/data}
+\item ERA5 Land hourly reanalysis, Copernicus Climate Data Store: relative humidity and dewpoint temperature, which influence adult mosquito survival beyond rainfall alone \cite{munozsabater2021}. \url{https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land}
+\item MODIS sixteen day vegetation index product, NASA Land Processes Distributed Active Archive Center: a proxy for surface water accumulation and breeding habitat \cite{didan2020}. \url{https://lpdaac.usgs.gov/products/mod13q1v061/}
+\item NISR Fifth Population and Housing Census, for district population denominators \cite{nisr2022}. \url{https://statistics.gov.rw/}
+\end{itemize}
+Full monthly case series for all thirty districts, beyond the aggregated bulletin figures used here, will require a formal request to the Rwanda Biomedical Centre.
+
+\section{Expected Challenges}
+\begin{itemize}
+\item Short historical record and possible reporting changes in the DHMIS over time: eleven years of monthly data limits sample size, so districts will be pooled by agroecological zone before specializing per district, and national totals will be cross checked against WHO figures \cite{who2024}.
+\item Coarse climate grid relative to district boundaries and class imbalance across the three risk levels: address with area weighted averaging of pixels per boundary and with balanced class weights, reporting balanced accuracy and macro F1 rather than raw accuracy.
+\item Cross border movement, insecticide resistance, and past intervention timing, including spraying and net distribution: none are yet available as structured records, so they are treated as residual error in this pilot, with intervention history to be requested from the Malaria and Other Parasitic Diseases Division for later use as a covariate.
+\item Limited district connectivity: run a lightweight, centralized monthly scoring script rather than a real time streaming system.
+\end{itemize}
+
+\section{Preliminary Success Metrics}
+Performance is measured with balanced accuracy, macro F1 score, and area under the ROC curve at each lead time, compared against a seasonal persistence baseline that repeats the historical class for each calendar month. An operational lead time detection rate, defined as the proportion of elevated and epidemic months correctly flagged at least one month before onset, will be reported alongside these conventional metrics since it more directly reflects the reduction in stockout risk that the system is intended to support. A preliminary target of seventy five percent balanced accuracy at a one month lead is proposed, to be refined once exploratory analysis of the actual class balance and noise level is complete. Predicted probabilities will also be checked for calibration with a reliability plot, and a short structured feedback session with malaria program staff will assess the usability of the forecast bulletin format.
+
+\section{Project Timeline and Deployment Resources}
+\begin{itemize}
+\item Weeks one to four: problem refinement, literature review, data acquisition across all sources, district boundary mapping, and cleaning of surveillance and climate records.
+\item Weeks five to seven: exploratory analysis, lag correlation between covariates and case counts, and development of the multinomial logistic regression baseline.
+\item Weeks eight to ten: gradient boosted tree model, nested cross validation, hyperparameter tuning, and held out evaluation against the persistence baseline, with the final days of week ten reserved as a contingency buffer to revisit model choice if performance does not clearly exceed the baseline.
+\item Weeks eleven and twelve: prototype monthly bulletin, packaging of the scoring script, documentation, and final presentation.
+\end{itemize}
+Deployment resources are entirely open source: Python with scikit learn and XGBoost for modeling, retrieval clients for the climate and vegetation archives listed above, geopandas for district boundary handling, a lightweight SQLite database for monthly features, Docker for packaging the scoring script, and a scheduled monthly job to regenerate the bulletin. The extracted dataset is small enough to train on a standard laptop, and a future pilot could run on existing Ministry of Health infrastructure or a modest cloud instance to keep retraining costs low.
+
+\section*{Limitations}
+This pilot uses a single national surveillance stream and openly available gridded climate and vegetation data, so it cannot yet capture cross border population movement, vector insecticide resistance trends, or the timing of past indoor spraying and net distribution campaigns, all of which independently affect malaria incidence and are not currently available to this project as structured historical records. The eleven year monthly record available per district is short by contemporary machine learning standards, which restricts model complexity and requires cautious interpretation of accuracy figures until more years of data accumulate. Predictions are generated at district resolution and are not intended to guide clinical decisions for individual patients. The coarse resolution of the climate grid relative to district boundaries also introduces averaging error that finer resolution satellite products could reduce in future work.
+
+\section*{Ethics Statement}
+All data sources proposed for this project are aggregate and publicly released, so no individual patient records are accessed and no additional informed consent process is required beyond what each data provider already applies. Because the output is a probabilistic forecast intended to support, not replace, expert judgment within the national malaria program, the system will present uncertainty alongside each prediction and will be described to end users as decision support rather than an automated allocation mechanism, reducing the risk that a false negative forecast leads to under preparation in an at risk district. Any future extension toward facility level data or historical intervention records would require explicit data sharing agreements with the Rwanda Biomedical Centre and adherence to applicable data protection law.
+
+% References are excluded from the two page limit per the assignment, so
+% this reduction only affects vertical space in the reference list, not the
+% page count. It also gives xurl more characters per line to work with,
+% meaning it has to break fewer of the long reference URLs and DOIs, and
+% does so less often mid word.
+\small
+\bibliography{references}
+\bibliographystyle{unsrtnat}
+
+\end{document}
