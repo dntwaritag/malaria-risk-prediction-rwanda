@@ -1,0 +1,129 @@
+{
+  "n_numeric": 30,
+  "max_vif_before": 4389473321023.875,
+  "n_infinite_vif_before": 1,
+  "n_vif_gt10_before": 13,
+  "top_vif_before": [
+    [
+      "Maximum_Temperature_2020",
+      4389473321023.9
+    ],
+    [
+      "Minimum_Temperature_2020",
+      2984492794811.5
+    ],
+    [
+      "Diurnal_Temperature_Range_2020",
+      539644074935.1
+    ],
+    [
+      "Mean_Temperature_2020",
+      168045.3
+    ],
+    [
+      "Land_Surface_Temperature_2020",
+      3801.9
+    ],
+    [
+      "Aridity_2020",
+      2993.5
+    ],
+    [
+      "Precipitation_2020",
+      1620.6
+    ],
+    [
+      "Day_Land_Surface_Temp_2020",
+      1322.4
+    ]
+  ],
+  "dropped": [
+    [
+      "Elevation",
+      "|r|=0.94 with partner"
+    ],
+    [
+      "Land_Surface_Temperature_2020",
+      "|r|=0.86 with partner"
+    ],
+    [
+      "Night_Land_Surface_Temp_2020",
+      "|r|=0.87 with partner"
+    ],
+    [
+      "Precipitation_2020",
+      "|r|=0.94 with partner"
+    ],
+    [
+      "Mean_Temperature_2020",
+      "|r|=0.99 with partner"
+    ],
+    [
+      "Minimum_Temperature_2020",
+      "|r|=0.94 with partner"
+    ],
+    [
+      "Aridity_2020",
+      "|r|=0.89 with partner"
+    ],
+    [
+      "PET_2020",
+      "|r|=0.98 with partner"
+    ],
+    [
+      "Growing_Season_Length",
+      "|r|=0.86 with partner"
+    ],
+    [
+      "Maximum_Temperature_2020",
+      "VIF=33.4"
+    ]
+  ],
+  "n_dropped": 10,
+  "n_kept": 20,
+  "max_vif_after": 7.005440569890904,
+  "dropped_mi": {
+    "Elevation": 0.01449,
+    "Land_Surface_Temperature_2020": 0.01617,
+    "Night_Land_Surface_Temp_2020": 0.01472,
+    "Precipitation_2020": 0.01499,
+    "Mean_Temperature_2020": 0.01472,
+    "Minimum_Temperature_2020": 0.0141,
+    "Aridity_2020": 0.01493,
+    "PET_2020": 0.01555,
+    "Growing_Season_Length": 0.00202,
+    "Maximum_Temperature_2020": 0.0154
+  },
+  "spearman_vs_pearson_top": [
+    [
+      "hv040",
+      -0.085,
+      -0.072
+    ],
+    [
+      "Elevation",
+      -0.071,
+      -0.064
+    ],
+    [
+      "Maximum_Temperature_2020",
+      0.061,
+      0.056
+    ],
+    [
+      "Diurnal_Temperature_Range_2020",
+      0.06,
+      0.053
+    ],
+    [
+      "Mean_Temperature_2020",
+      0.059,
+      0.052
+    ],
+    [
+      "PET_2020",
+      0.057,
+      0.053
+    ]
+  ]
+}

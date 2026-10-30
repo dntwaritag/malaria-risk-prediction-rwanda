@@ -273,3 +273,38 @@ def run_diagnostics(train: pd.DataFrame, feature_columns: list[str], figures_dir
     with open(stats_path, "w") as f:
         json.dump(res, f, indent=2, default=str)
     return res
+
+
+def collinearity_report(train: pd.DataFrame, feature_columns: list[str], path="reports/collinearity_stats.json") -> dict:
+    """VIF before/after the linear-branch screen, dropped features, and MI of each flagged pair member."""
+    import warnings
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+    from src.transformers import CollinearityScreen
+    X, y = train[feature_columns], train["y"].values
+    prep, _, num = make_preprocessor_for(X, feature_columns)
+    Z = prep.fit_transform(X)
+    T = Z[[c for c in Z.columns if c in num]]
+
+    def vifs(df):
+        A = df.values.astype(float)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return {c: float(variance_inflation_factor(A, i)) for i, c in enumerate(df.columns)}
+    before = vifs(T)
+    scr = CollinearityScreen(corr_threshold=0.85, vif_threshold=10.0, candidate_columns=list(T.columns)).fit(T, y)
+    dropped_names = [d[0] for d in scr.dropped_]
+    kept = T[[c for c in T.columns if c not in dropped_names]]
+    after = vifs(kept)
+    mi = dict(zip(T.columns, mutual_info_classif(T.values, y, random_state=42)))
+    spear = {c: float(stats.spearmanr(T[c], y)[0]) for c in T.columns}
+    pear = {c: float(stats.pearsonr(T[c], y)[0]) for c in T.columns}
+    inf = [c for c, v in before.items() if not np.isfinite(v)]
+    out = {"n_numeric": int(T.shape[1]), "max_vif_before": float(max(v for v in before.values() if np.isfinite(v))),
+           "n_infinite_vif_before": len(inf), "n_vif_gt10_before": int(sum((v > 10) or not np.isfinite(v) for v in before.values())),
+           "top_vif_before": sorted(((c, round(v, 1)) for c, v in before.items() if np.isfinite(v)), key=lambda t: -t[1])[:8],
+           "dropped": [list(d) for d in scr.dropped_], "n_dropped": len(scr.dropped_), "n_kept": int(kept.shape[1]),
+           "max_vif_after": float(max(after.values())), "dropped_mi": {d[0]: round(float(mi[d[0]]), 5) for d in scr.dropped_},
+           "spearman_vs_pearson_top": sorted(((c, round(spear[c], 3), round(pear[c], 3)) for c in T.columns), key=lambda t: -abs(t[1]))[:6]}
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    json.dump(out, open(path, "w"), indent=2, default=str)
+    return out
