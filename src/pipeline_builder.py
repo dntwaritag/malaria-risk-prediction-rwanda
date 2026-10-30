@@ -111,7 +111,7 @@ def build_preprocessor(groups: dict, ordinal_cols: list[str], nominal_cols: list
 
 
 def numeric_columns(feature_columns: list[str]) -> list[str]:
-    return [c for c in feature_columns if c in D.CONTINUOUS_PERSON + D.DISCRETE_PERSON + D.climate_feature_columns()]
+    return [c for c in feature_columns if c in D.CONTINUOUS_PERSON + D.DISCRETE_PERSON + D.climate_feature_columns() or c.startswith("cm_")]
 
 
 def make_preprocessor_for(X_train: pd.DataFrame, feature_columns: list[str], scaler: str = "standard"):
