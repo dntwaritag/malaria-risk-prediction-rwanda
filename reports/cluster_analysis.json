@@ -1,0 +1,88 @@
+{
+  "clusters": 170,
+  "clusters_with_positive": 58,
+  "positives": 179,
+  "top1_cluster_positives": 39,
+  "top3_share": 0.3575418994413408,
+  "top1_share": 0.21787709497206703,
+  "by_province": [
+    {
+      "hv024": 1,
+      "size": 3036,
+      "sum": 63,
+      "mean": 0.0208
+    },
+    {
+      "hv024": 2,
+      "size": 4388,
+      "sum": 47,
+      "mean": 0.0107
+    },
+    {
+      "hv024": 3,
+      "size": 3996,
+      "sum": 14,
+      "mean": 0.0035
+    },
+    {
+      "hv024": 4,
+      "size": 3317,
+      "sum": 30,
+      "mean": 0.009
+    },
+    {
+      "hv024": 5,
+      "size": 3935,
+      "sum": 25,
+      "mean": 0.0064
+    }
+  ],
+  "by_age_group": [
+    {
+      "g": "(-1, 4]",
+      "size": 2412,
+      "sum": 24,
+      "mean": 0.01
+    },
+    {
+      "g": "(4, 14]",
+      "size": 4760,
+      "sum": 58,
+      "mean": 0.0122
+    },
+    {
+      "g": "(14, 29]",
+      "size": 4821,
+      "sum": 52,
+      "mean": 0.0108
+    },
+    {
+      "g": "(29, 49]",
+      "size": 4337,
+      "sum": 29,
+      "mean": 0.0067
+    },
+    {
+      "g": "(49, 100]",
+      "size": 2342,
+      "sum": 16,
+      "mean": 0.0068
+    }
+  ],
+  "cluster_level_model": {
+    "logistic_l2": {
+      "auc_mean": 0.5182727832512315,
+      "auc_sd": 0.03349564446647198,
+      "ap_mean": 0.356298700575352,
+      "baseline_ap": 0.3411764705882353,
+      "spearman_with_prevalence": 0.10366569154131265
+    },
+    "random_forest": {
+      "auc_mean": 0.5752155172413793,
+      "auc_sd": 0.026929906751341572,
+      "ap_mean": 0.45391155957783863,
+      "baseline_ap": 0.3411764705882353,
+      "spearman_with_prevalence": 0.1897594080978321
+    }
+  }
+}
