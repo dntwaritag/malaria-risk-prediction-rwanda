@@ -109,6 +109,13 @@ results and calibration bins, are in `reports/evaluation.json`; diagnostics are 
 | `fig4_1_transformation_grid.png` | Raw, log, min-max, standardized |
 | `fig5_1_pca_scree_plot.png` | Scree and cumulative variance (12 components reach 90%, 15 reach 95%) |
 
+## 4b. Why the scores are low, and the 2017 to 2023 transfer test
+
+Only 58 of 170 clusters contain a positive, one cluster holds 39 of the 179 positives (21.8%) and the top three hold 35.8%
+(`src/cluster_analysis.py`). A cluster-level model reaches only ROC-AUC 0.52 to 0.58. Training on MIS 2017 (1,765 positives) and
+testing on all of MIS 2023 (`src/transfer.py`) gives PR-AUC 0.015 to 0.021 and ROC-AUC 0.63 to 0.67 against a 0.0096 baseline,
+a more stable estimate than the 36-positive hold-out. The full report is `docs/report/Assignment3_Phase2.pdf`.
+
 ## 5. Repository layout
 
 ```

@@ -1,0 +1,171 @@
+\pdfoutput=1
+\documentclass[11pt]{article}
+\usepackage{EACL2023}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{booktabs,array,tabularx}
+\usepackage{amsmath}
+\usepackage{xurl}
+\newcommand{\figdir}{../../figures/}
+\title{Strategy versus Reality in a Leakage Free Preprocessing Pipeline for Malaria Risk Prediction in Rwanda}
+\author{Denys Ntwaritaganzwa \\
+  Carnegie Mellon University Africa \\
+  \texttt{dntwarit@andrew.cmu.edu} \\
+  Code: \url{https://github.com/dntwaritag/malaria-risk-prediction-rwanda}}
+\begin{document}
+\maketitle
+\begin{abstract}
+We implement and audit a leakage free preprocessing and evaluation pipeline that predicts a positive malaria rapid diagnostic test (RDT) from household, demographic and climate covariates in the 2023 Rwanda Malaria Indicator Survey (MIS). Every planned Phase~1 decision is compared with what the data forced in Phase~2 and backed by a number and a figure. Measured data realities changed eight decisions, including the missing code convention, the treatment of structural missingness, and the winsorizing rule for zero spread features. The matrix grows from $18{,}672\times53$ to $14{,}940\times95$ (train) with no missing cells. Predictive skill is weak: held out PR-AUC is $0.013$ to $0.020$ against a $0.0096$ prevalence baseline. We show that positives are concentrated in a few clusters, and that training on MIS~2017 and testing on all 179 positives of MIS~2023 gives a more stable estimate (PR-AUC $0.015$ to $0.021$).
+\end{abstract}
+
+\section{Introduction}
+Malaria remains a public health concern in Rwanda even after large reductions in transmission \cite{habyarimana2020}. The task is binary: for a person who was tested, predict RDT positivity (\texttt{hml35}) so that bed nets and spraying can be targeted. Phase~1 fixed a preprocessing plan before any data were seen. Phase~2 executes it in Python inside \texttt{scikit-learn} \texttt{Pipeline} and \texttt{ColumnTransformer} objects \cite{pedregosa2011} and records where reality disagreed. All statistics below are computed on training data only unless stated. Source code, figures and notebook are in the repository linked above.
+
+\section{Data and Pipeline Output Verification}
+\textbf{Data.} The primary dataset is the Person Recode of MIS~2023 with cluster level geospatial covariates (5~km rasters, 2020 values) joined by cluster \cite{dhsguide}. The file has 19{,}038 rows; 366 have no valid test and are removed (the target is never imputed), leaving $N=18{,}672$ with $P=53$ features (26 continuous, 22 nominal, 4 discrete, 1 ordinal). Overall missingness is 1.77\% of cells; 9{,}933 rows are complete and 8{,}739 have at least one missing value.
+
+\textbf{Split.} A cluster grouped, label stratified split keeps every survey cluster on one side only (cluster overlap $=0$): train $14{,}940$ rows with 143 positives (0.957\%, imbalance 103.5:1), test $3{,}732$ rows with 36 positives (0.96\%). The split seed (51) was chosen by label balance only, never by model performance (seed 42 gave only 20 test positives).
+
+\textbf{Dimension verification.} Table~\ref{tab:dims} reports the matrix before and after the pipeline. No rows are deleted by outlier handling, and no information is discarded: all 53 raw features are retained and expanded to 95 model columns (ordinal and one hot encoding of 22 nominal columns, plus missing indicator flags). The correlation and VIF screen is applied \emph{only} on the linear model branch and removes 10 climate or terrain features, giving 85 columns there. PCA is used for diagnostics only; raw interpretable features are kept for classification.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{lrrr}
+\toprule
+Stage & Rows & Cols & NaN cells\\
+\midrule
+Raw model table & 18{,}672 & 53 & 1.77\%\\
+Train, preprocessed & 14{,}940 & 95 & 0\\
+Test, preprocessed & 3{,}732 & 95 & 0\\
+Linear branch (after screen) & 14{,}940 & 85 & 0\\
+\bottomrule
+\end{tabular}
+\caption{Pipeline output verification (initial vs final $N\times P$). Train and test have identical column order; parameters are fit on train.}
+\label{tab:dims}
+\end{table}
+
+\section{Strategy versus Reality Decision Log}
+Table~\ref{tab:log} lists each decision with the Phase~1 plan, the executed step and the evidence.
+
+\begin{table*}[t]
+\centering\footnotesize
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{3.7cm}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}X}
+\toprule
+Step & Phase 1 plan & Phase 2 actual & Evidence and figure\\
+\midrule
+Survey and unit & MIS 2017 or DHS 2019--20, children only & MIS 2023, all ages, age as a feature; MIS 2017 kept as secondary & Under 5 years gives only 24 positives of 2{,}412; MIS 2023 has GPS covariates, 2017 has none\\
+Missing codes & Sentinel 9 recoded to NaN & Codes 3, 4, 6 for \texttt{hml35} (6, 7 for \texttt{hml32}) recoded; 366 rows without valid test dropped & Value counts of the real file; code 9 never occurs\\
+Eligibility filter & Filter on \texttt{hv042}=1 and \texttt{hc1} age & \texttt{hv042} is hemoglobin selection and \texttt{hc1} is absent in PR, so filter on valid \texttt{hml35} instead & Codebook inspection\\
+Missingness mechanism & Test MCAR/MAR, then impute & \texttt{hml4}, \texttt{hml10} are missing by design (46.12\%, 6{,}891 of 14{,}940); explicit ``no net'' level plus indicator, no imputation & Little's MCAR $\chi^2=6984.3$, df=29, $p<0.001$; Cram\'er's $V=1.00$ with \texttt{hml12} (Fig.~\ref{fig:miss})\\
+Imputation & Mean if $|$skew$|<0.5$, else median; KNN if $>5\%$ missing & Median for skewed, mean for Gaussian, constant ``missing'' for nominal; no column exceeds 5\% except the structural pair; imputers keep indicators & 13 right skewed, 5 other skewed, 12 Gaussian columns (Fig.~\ref{fig:out})\\
+Outliers & IQR rule for skewed, Z-score for normal; winsorize & Same, plus a percentile fallback (1st/99th) when IQR$=0$ & \texttt{Frost\_Days\_2020}: Q1=Q3=0, plain rule flags 2{,}986 rows (19.99\%) and would flatten the feature to a constant (Fig.~\ref{fig:out})\\
+Association tests & Pearson/point biserial, Spearman or Mann--Whitney for skewed & Mutual information (MI) and point biserial with Spearman check; no switch needed & Largest $|\rho|-|r|$ gap is 0.013 (\texttt{hv040}: $\rho=-0.085$, $r=-0.072$); top MI only 0.016 nats (Fig.~\ref{fig:imp})\\
+Collinearity & $|r|\ge0.85$, then VIF$>10$, for linear and distance models, optional for trees & Applied to the logistic branch only; trees keep all features & 20 pairs with $|r|\ge0.85$ (Figs.~\ref{fig:corr}, \ref{fig:scatter}); 12 features with VIF$>10$; 10 dropped; max VIF falls to 7.54\\
+Transformation & MinMax scaling & log1p for right skewed, then standardization & \texttt{Livestock\_Goats} skew 4.12 $\to$ $-0.19$ (Fig.~\ref{fig:tf})\\
+Encoding & Wealth quintile $\{0..4\}$, one hot $\le10$ levels, target encoding for high cardinality & Explicit order, one hot with \texttt{drop=if\_binary}, rare levels $<1\%$ to ``Other''; no high cardinality column used & 22 nominal columns expand to the 95 model columns\\
+Split & Group by cluster, stratify & StratifiedGroupKFold, seed chosen by label balance & Overlap 0; 143/36 positives\\
+Imbalance & Class weights; SMOTE only if needed; threshold on validation & Class weights only; threshold on out-of-fold data (recall target 0.70) & 103.5:1; SMOTE not needed\\
+Calibration and weights & Planned & Platt and isotonic fit on out-of-fold predictions; weighted (\texttt{hv005}) and unweighted metrics & Brier 0.13 $\to$ 0.0094 for logistic (Table~\ref{tab:res})\\
+Climate source & CHIRPS, ERA5, MODIS buffer means & DHS 5~km covariates (2020 values) joined by cluster & Not reachable from the build environment; deviation listed in Sec.~\ref{sec:lim}\\
+\bottomrule
+\end{tabularx}
+\caption{Decision log: Phase~1 plan versus Phase~2 execution with the numerical justification.}
+\label{tab:log}
+\end{table*}
+
+\section{Empirical Justification}
+\subsection{Missingness (Fig.~\ref{fig:miss}, \ref{fig:target})}
+Only \texttt{hml4} and \texttt{hml10} exceed the 1\% threshold (46.12\% each); their missingness is exactly the households with no bed net. Little's test on the numeric block \cite{little1988} rejects MCAR ($\chi^2=6984.3$, df $=29$, $p<0.001$, two patterns), and Cram\'er's $V$ of the missing indicator with other variables is 1.00 (\texttt{hml12}), 0.70 (\texttt{hv227}), 0.36 (province), 0.17 (wealth), 0.06 (residence) and 0.04 (sex). The value is absent because of a skip rule, so imputing it by the mean or median would invent bed nets. Figure~\ref{fig:target} shows the 103.5:1 imbalance, which fixes the metric choice (PR-AUC, not accuracy).
+
+\subsection{Outliers (Fig.~\ref{fig:out})}
+\texttt{Nightlights\_Composite} has skew 3.66 and kurtosis 13.89 (Q1 $=0$, Q3 $=0.095$, fences $[-0.142,\,0.237]$) and 3{,}046 flagged values (20.39\%). Age is mildly skewed (0.87; fences $[-33,\,79]$; 124 values, 0.83\%) and rooms per household has 718 flagged values (4.81\%). Capping keeps $N$ intact, which matters with 143 training positives. The \texttt{Frost\_Days\_2020} case is a genuine deviation: with Q1 $=$ Q3 $=0$ the fence is $[0,0]$ and the plain rule would remove all non-zero information, so the winsorizer uses percentile bounds when IQR is zero.
+
+\subsection{Association and collinearity (Figs.~\ref{fig:corr}--\ref{fig:imp})}
+Twenty pairs reach $|r|\ge0.85$, the strongest being mean temperature with PET ($r=0.993$), maximum temperature ($0.989$) and minimum temperature ($0.983$), and precipitation with aridity ($0.981$). Before screening, 12 of 30 numeric features have VIF above 10 (maximum finite VIF about $4.5\times10^{12}$ for maximum temperature, $1.8\times10^{5}$ for mean temperature). The screen drops 10 features (nine by the $|r|$ rule, maximum temperature by VIF $=35.6$) and the maximum VIF falls to 7.54. Mutual information with the target is small for all features (top: land surface temperature 0.0162, wet days 0.0158, diurnal range 0.0156 nats). Because the rule keeps the feature with the larger $|r|$ to the target, land surface temperature (highest MI) was dropped; ranking by MI would have kept it, a documented limitation. Tree models are not screened. Multiple tests are corrected with Benjamini--Hochberg \cite{benjamini1995}; rankings are used for screening, not inference, because clustered data make naive $p$ values optimistic.
+
+\subsection{Transformations and PCA (Figs.~\ref{fig:tf}, \ref{fig:pca})}
+For \texttt{Livestock\_Goats}, log1p reduces skew from 4.12 to $-0.19$ (mean 90.1 to 4.25, sd 79.3 to 0.73); min-max gives mean 0.53, sd 0.15; standardization gives mean 0, sd 1. PCA on the 30 scaled numeric features has leading eigenvalues $11.58, 4.14, 2.52, 1.75, 1.56$ (variance $38.6\%, 13.8\%, 8.4\%, 5.8\%, 5.2\%$); 12 components reach 90\% and 15 reach 95\%. This shows strong redundancy among climate variables, but raw features are retained for interpretability.
+
+\section{Leakage Free Architecture}
+All steps are inside \texttt{Pipeline} and \texttt{ColumnTransformer} objects (sentinel recoder, winsorizers, imputers with indicators, log1p, scaler, rare level grouping, one hot and ordinal encoders, optional collinearity screen). Training skewness decides each column's branch, and every threshold, median, mean, standard deviation and capping bound is learned from \texttt{X\_train} only and applied unchanged to test data. Cross validation uses cluster grouped, label stratified folds. Calibrators and operating thresholds are fit on out-of-fold predictions. The second malaria test, test-process variables, modelled malaria columns, anemia and treatment variables, identifiers are excluded as leakage, and the survey weight is used only in evaluation, never as a feature.
+
+\section{Model Results and Why They Are Weak}
+\textbf{Models.} Regularized logistic regression, random forest, LightGBM \cite{ke2017} and XGBoost \cite{chen2016} with class weights; probabilities are calibrated with Platt scaling \cite{platt1999}. Table~\ref{tab:res} gives held out results with cluster bootstrap 95\% intervals for PR-AUC. Out-of-fold PR-AUC (5-fold grouped) is 0.0455 for XGBoost, 0.0393 LightGBM, 0.0289 logistic and 0.0275 random forest, so XGBoost is selected. Its test PR-AUC (0.0203; weighted 0.0193) is about twice the baseline, but its interval $[0.005, 0.064]$ overlaps those of all other models, so it is not significantly better than LightGBM.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{lcccc}
+\toprule
+Model & PR-AUC & ROC & Brier & Recall\\
+\midrule
+Logistic & .0132 & .546 & .0096 & .53\\
+Random forest & .0138 & .625 & .0096 & .47\\
+LightGBM & .0156 & .656 & .0097 & .75\\
+XGBoost & .0203 & .643 & .0096 & .64\\
+\midrule
+Baseline & .0096 & .500 & & \\
+\bottomrule
+\end{tabular}
+\caption{Held out test (3{,}732 rows, 36 positives), Platt calibrated, unweighted. Weighted PR-AUC: .0130, .0129, .0150, .0193.}
+\label{tab:res}
+\end{table}
+
+\textbf{Diagnosis.} The weak scores are not a coding error: out-of-fold and test ROC-AUC differ (0.75 vs 0.64) because grouped splits remove cluster memorization. The cause is the data. Only 58 of 170 clusters contain any positive; one cluster holds 39 of 179 positives (21.8\%) and the top three hold 35.8\%. Prevalence by province code ranges from 0.35\% to 2.08\%, and by age from 0.68\% to 1.22\%. A 36 positive test set therefore reflects a handful of clusters. Predicting at cluster level (170 clusters, 5-fold $\times$ 10 repeats) gives ROC-AUC only $0.52\pm0.03$ (logistic) and $0.58\pm0.03$ (random forest), so the available covariates barely explain where outbreaks occur.
+
+\textbf{More powerful evaluation.} MIS~2017 has 1{,}765 positives. Training on 2017 household features and testing on all 18{,}672 people of MIS~2023 (179 positives, disjoint clusters, no leakage) gives PR-AUC $0.0208$ (logistic, 95\% CI $[0.008, 0.040]$, ROC $0.673$), $0.0174$ (LightGBM), $0.0189$ (XGBoost) and $0.0152$ (random forest), all above the $0.0096$ baseline. This is the more reliable estimate of generalization and shows that household information gives about two fold lift over chance, not strong discrimination.
+
+\section{Limitations and Supervisor Feedback}
+\label{sec:lim}
+We address four review points. (1) GPS displacement (urban up to 2~km, rural up to 5~km) is mitigated, not removed: climate values are 5~km cluster covariates for 2020, not buffer means from CHIRPS, ERA5 or MODIS (not reachable from the build environment), and are not matched to the interview month. (2) Normalized \texttt{hv005} weights are used in evaluation and both weighted and unweighted results are reported; weights are not used in training. (3) Calibration uses only out-of-fold predictions. (4) VIF reduction is restricted to the linear branch. Further limits: 179 positives in total, a single survey year for training the main model, and results that describe this survey only.
+
+\section{Conclusion}
+The pipeline is leakage free and fully auditable, but malaria positivity in MIS~2023 is dominated by a few clusters that household and coarse climate covariates cannot locate. The honest finding is a modest lift (about two times baseline) with wide intervals; stronger climate data at survey time and cluster level targets are the next steps.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{\figdir fig1_1_missingness_heatmap.png}
+\caption{Missingness pattern (training rows sorted by pattern) and top missing columns.}\label{fig:miss}
+\end{figure*}
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{\figdir fig1_2_target_distribution.png}
+\caption{Class balance by split (log scale) and age density by test result.}\label{fig:target}
+\end{figure}
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.9\textwidth]{\figdir fig2_1_outlier_boxplots.png}
+\caption{Outlier box plots, raw versus winsorized, for the six features with the most flagged values.}\label{fig:out}
+\end{figure*}
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.78\textwidth]{\figdir fig3_1_correlation_matrix.png}
+\caption{Upper triangle correlation heatmap of transformed numeric training features; boxes mark $|r|\ge0.85$.}\label{fig:corr}
+\end{figure*}
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{\figdir fig3_2_collinear_scatterplots.png}
+\caption{Collinear pairs with fitted linear trend (standardized values).}\label{fig:scatter}
+\end{figure*}
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{\figdir fig3_3_target_importance.png}
+\caption{Feature to target importance: mutual information and $|$point biserial $r|$ (training data, top 20).}\label{fig:imp}
+\end{figure*}
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{\figdir fig4_1_transformation_grid.png}
+\caption{\texttt{Livestock\_Goats}: raw, log1p, min-max and standardized.}\label{fig:tf}
+\end{figure}
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{\figdir fig5_1_pca_scree_plot.png}
+\caption{PCA scree and cumulative variance with 90\% and 95\% cutoffs.}\label{fig:pca}
+\end{figure}
+
+\bibliography{references}
+\bibliographystyle{acl_natbib}
+\end{document}
