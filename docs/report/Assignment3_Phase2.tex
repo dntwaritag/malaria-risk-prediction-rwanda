@@ -17,7 +17,7 @@
 \author{Denys Ntwaritaganzwa \\
   Carnegie Mellon University Africa \\
   \texttt{dntwarit@andrew.cmu.edu} \\
-  Code: \url{https://github.com/dntwaritag/malaria-risk-prediction-rwanda}}
+  \href{https://github.com/dntwaritag/malaria-risk-prediction-rwanda}{GitHub Link}}
 \renewcommand{\topfraction}{0.95}\renewcommand{\bottomfraction}{0.9}\renewcommand{\textfraction}{0.08}\renewcommand{\floatpagefraction}{0.6}\renewcommand{\dblfloatpagefraction}{0.6}\renewcommand{\dbltopfraction}{0.95}
 \begin{document}
 \maketitle
@@ -26,7 +26,7 @@ We implement and audit a leakage free preprocessing and evaluation pipeline that
 \end{abstract}
 
 \section{Introduction}
-Malaria remains a public health concern in Rwanda even after large reductions in transmission \cite{habyarimana2020}. The task is binary: for a person who was tested, predict RDT positivity (\texttt{hml35}) so that bed nets and spraying can be targeted. Phase~1 fixed a preprocessing plan before any data were seen. Phase~2 executes it in Python inside \texttt{scikit-learn} \texttt{Pipeline} and \texttt{ColumnTransformer} objects \cite{pedregosa2011} and records where reality disagreed. All statistics below are computed on training data only unless stated. Source code, figures and notebook are in the repository linked above.
+Malaria remains a public health concern in Rwanda even after large reductions in transmission \cite{habyarimana2020}. The task is binary: for a person who was tested, predict RDT positivity (\texttt{hml35}) so that bed nets and spraying can be targeted. Phase~1 fixed a preprocessing plan before any data were seen. Phase~2 executes it in Python inside \texttt{scikit-learn} \texttt{Pipeline} and \texttt{ColumnTransformer} objects \cite{pedregosa2011} and records where reality disagreed. All statistics below are computed on training data only unless stated. Source code, figures and notebook are in the repository behind the GitHub Link under the title.
 
 \section{Data and Pipeline Output Verification}
 \textbf{Data.} The primary dataset is the Person Recode of MIS~2023 with cluster level geospatial covariates (5~km rasters, 2020 values) joined by cluster \cite{dhsguide}. The file has 19{,}038 rows; 366 have no valid test and are removed (the target is never imputed), leaving $N=18{,}672$ with $P=53$ features (26 continuous, 22 nominal, 4 discrete, 1 ordinal). Overall missingness is 1.77\% of cells; 9{,}933 rows are complete and 8{,}739 have at least one missing value.
@@ -168,6 +168,26 @@ Baseline & .0096 & .500 & & \\
 \textbf{Diagnosis.} The weak scores are not a coding error. Out-of-fold and hold-out ROC-AUC differ (0.75 vs 0.64) because grouped splits remove cluster memorization, and the cause is the data. Only 58 of 170 clusters contain any positive; one cluster holds 39 of 179 positives (21.8\%) and the top three hold 35.8\%. Prevalence by province code ranges from 0.35\% to 2.08\%, by age from 0.68\% to 1.22\%. A 36 positive hold-out therefore reflects a handful of clusters. Climate covariates are constant within a cluster, so a flexible model can memorize the 170 distinct climate profiles, which does not transfer to unseen clusters. A model predicting which clusters contain a positive reaches ROC-AUC only $0.52\pm0.03$ (logistic) and $0.58\pm0.03$ (random forest).
 
 \textbf{Improved evaluation and model.} To use all 179 positives, every person is predicted once by a model that never saw their cluster (5-fold cluster grouped, label stratified, pooled over 18{,}672 rows; Table~\ref{tab:pooled}). Five configurations were fixed in advance. Dropping the climate covariates and keeping 30 household features raises logistic PR-AUC from 0.021 to 0.041; adding cluster mean age, wealth score, household size, rooms and nets (label free context) raises it to \textbf{0.050} (ROC-AUC 0.72, weighted PR-AUC 0.048; the top 20\% highest scores capture 49\% of positives, a lift of 2.5). Tree models do not benefit, and adding all of MIS~2017 (1{,}765 positives, no climate) lowers logistic PR-AUC to 0.016, so survey round shift outweighs the extra positives. Training on 2017 alone and testing on all of 2023 gives PR-AUC 0.015 to 0.021. All intervals are wide (best model $[0.009, 0.137]$) and the five configurations were compared on the same data, so some optimism remains; the ranking of logistic over boosted trees is suggestive, not proven.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{p{3.3cm}p{2.5cm}cc}
+\toprule
+Step & Change & PR-AUC & Gain\\
+\midrule
+Random baseline & none & .0096 & 1.0$\times$\\
+Hold-out, best (XGBoost) & 36 positives & .0203 & 2.1$\times$\\
+Pooled, all features & 179 positives, grouped CV & .0211 & 2.2$\times$\\
++ household features only & drop climate & .0408 & 4.3$\times$\\
++ cluster mean context & label free & \textbf{.0498} & \textbf{5.2$\times$}\\
++ interview month climate & CHIRPS, ERA5, MODIS & .0194 & 2.0$\times$\\
+\bottomrule
+\end{tabular}
+\caption{Improvement path (logistic regression unless stated). The last row was tested and rejected.}
+\label{tab:path}
+\end{table}
+
+Table~\ref{tab:path} summarizes the path: each retained step is justified by out-of-fold evidence, and the final step shows that a plausible improvement was tested and discarded rather than assumed.
 
 \begin{table}[t]
 \centering\small
