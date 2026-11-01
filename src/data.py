@@ -89,10 +89,10 @@ def load_mis2023(raw_dir: str | Path = "data/raw/mis2023") -> dict:
     gc_cols = [c for c in climate_feature_columns() if c in gc.columns]
     gc_small = gc[["DHSCLUST"] + gc_cols].rename(columns={"DHSCLUST": CLUSTER_ID})
 
-    data = valid[[CLUSTER_ID, SAMPLE_WEIGHT, TARGET_COLUMN_RDT] + keep_person].merge(
+    data = valid[[CLUSTER_ID, SAMPLE_WEIGHT, TARGET_COLUMN_RDT, "hv006", "hv007"] + keep_person].merge(
         gc_small, on=CLUSTER_ID, how="left", validate="m:1"
     )
-    data = data.rename(columns={TARGET_COLUMN_RDT: "y", CLUSTER_ID: "cluster"})
+    data = data.rename(columns={TARGET_COLUMN_RDT: "y", CLUSTER_ID: "cluster", "hv006": "int_month", "hv007": "int_year"})
     data["weight"] = data[SAMPLE_WEIGHT] / 1e6
     data["y"] = data["y"].astype(int)
     feature_columns = keep_person + gc_cols
