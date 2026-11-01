@@ -138,7 +138,7 @@ class RareCategoryGrouper(_OneToOneNames, BaseEstimator, TransformerMixin):
 class IQRWinsorizer(_OneToOneNames, BaseEstimator, TransformerMixin):
     """Cap continuous values outside Q1 minus 1.5 IQR to Q3 plus 1.5 IQR.
 
-    Why this exists: the assignment specifies the 1.5 times IQR rule for
+    Why this exists: the preprocessing specification calls for the 1.5 times IQR rule for
     skewed, non normally distributed continuous features, and requires
     capping rather than row deletion to preserve sample size and avoid
     discarding valid information in a row's other columns. The bounds
@@ -186,7 +186,7 @@ class IQRWinsorizer(_OneToOneNames, BaseEstimator, TransformerMixin):
 class ZScoreWinsorizer(_OneToOneNames, BaseEstimator, TransformerMixin):
     """Cap continuous values beyond plus or minus z standard deviations.
 
-    Why this exists: the assignment specifies the Z score rule for
+    Why this exists: the preprocessing specification calls for the Z score rule for
     approximately normally distributed continuous features, as an
     alternative to the IQR rule for skewed features. Mean and standard
     deviation are learned on training data only, for the same leakage
