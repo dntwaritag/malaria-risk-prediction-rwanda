@@ -41,3 +41,7 @@ Thumbs.db
 *.bbl
 *.blg
 *.toc
+
+# GPS-derived and downloaded external data (DHS terms: do not redistribute)
+data/external/*
+!data/external/.gitkeep
