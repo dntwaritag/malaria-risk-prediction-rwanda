@@ -22,7 +22,7 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-We implement and audit a leakage free preprocessing and evaluation pipeline that predicts a positive malaria rapid diagnostic test (RDT) from household, demographic and climate covariates in the 2023 Rwanda Malaria Indicator Survey (MIS). Every planned Phase~1 decision is compared with what the data forced in Phase~2 and backed by a number and a figure; eight decisions changed, including the missing code convention, the treatment of structural missingness and the winsorizing rule for zero spread features. The matrix grows from $18{,}672\times53$ to $14{,}940\times95$ (train) with no missing cells. Positives are rare (0.96\%) and concentrated in a few clusters, so a 36 positive hold out is unreliable. Evaluating every one of the 179 positives out of fold under cluster grouped cross validation, a regularized logistic regression on household features plus cluster mean context reaches PR-AUC $0.050$ (5.2 times the $0.0096$ baseline) and ROC-AUC $0.72$, whereas boosted trees on the 2020 climate covariates reach only $0.015$ to $0.021$. Wide intervals and the next data to acquire are reported. The original project proposal is reproduced in Appendix~A.
+We implement and audit a leakage free preprocessing and evaluation pipeline that predicts a positive malaria rapid diagnostic test (RDT) from household, demographic and climate covariates in the 2023 Rwanda Malaria Indicator Survey (MIS). Every planned Phase~1 decision is compared with what the data forced in Phase~2 and backed by a number and a figure; eight decisions changed, including the missing code convention, the treatment of structural missingness and the winsorizing rule for zero spread features. The matrix grows from $18{,}672\times53$ to $14{,}940\times95$ (train) with no missing cells. Positives are rare (0.96\%) and concentrated in a few clusters, so a 36 positive hold out is unreliable. Evaluating every one of the 179 positives out of fold under cluster grouped cross validation, a regularized logistic regression on household features plus cluster mean context reaches PR-AUC $0.050$ (5.2 times the $0.0096$ baseline) and ROC-AUC $0.72$, whereas boosted trees on the 2020 climate covariates reach only $0.015$ to $0.021$. Interview month climate features built from the newly downloaded CHIRPS v3 rainfall, ERA5-Land dewpoint and MODIS EVI and NDVI did not improve the result (PR-AUC $0.011$ to $0.021$), and the report states why. Wide intervals and the data still needed are reported. The original project proposal is reproduced in Appendix~A.
 \end{abstract}
 
 \section{Introduction}
@@ -76,7 +76,7 @@ Imbalance & Class weights; SMOTE only if needed; threshold on validation & Class
 Calibration and weights & Planned & Platt and isotonic fit on out-of-fold predictions; weighted (\texttt{hv005}) and unweighted metrics & Brier 0.13 $\to$ 0.0094 for logistic (Table~\ref{tab:res})\\
 Model family and features & XGBoost, LightGBM or CatBoost on household plus climate features; logistic as baseline & Regularized logistic on household features plus cluster mean context is best out of fold; climate features lower PR-AUC (0.021 vs 0.041) & Pooled out-of-fold PR-AUC over 179 positives (Table~\ref{tab:pooled})\\
 Evaluation protocol & One 80/20 grouped hold-out & Hold-out kept, but headline numbers are pooled out-of-fold over all 18{,}672 rows & Hold-out has 36 positives from few clusters; one cluster holds 21.8\% of positives\\
-Climate source & CHIRPS, ERA5, MODIS buffer means & DHS 5~km covariates (2020 values) joined by cluster & Not reachable from the build environment; deviation listed in Sec.~\ref{sec:lim}\\
+Climate source & CHIRPS, ERA5, MODIS buffer means & Main models: DHS 5~km covariates (2020 values). Added July to December 2023 interview month features: CHIRPS v3 (5~km buffer mean), ERA5-Land dewpoint, MODIS MOD13Q1 EVI and NDVI, lags 0 to 3 & Pooled PR-AUC with them 0.011 to 0.021 vs 0.050 without (Table~\ref{tab:dyn}); ERA5 file held dewpoint only; deviation in Sec.~\ref{sec:lim}\\
 \bottomrule
 \end{tabularx}
 \caption{Decision log: Phase~1 plan versus Phase~2 execution with the numerical justification.}
@@ -189,35 +189,55 @@ D B + MIS 2017 & LightGBM & .0192 & .676 & 1.87\\
 \label{tab:pooled}
 \end{table}
 
+\textbf{Interview month climate features.} After the first submission draft we downloaded CHIRPS v3 monthly rainfall (mean of pixels within 5~km of each displaced cluster point), ERA5-Land monthly 2~m dewpoint temperature (0.1$^\circ$ cell; the downloaded file contained dewpoint only, not temperature or rainfall) and MODIS MOD13Q1 EVI and NDVI composites (AppEEARS, quality filtered, 10.6\% of interview month values missing after filtering). MIS~2023 interviews ran October to December 2023, so lags 0 to 3 months cover July to December 2023. Table~\ref{tab:dyn} shows that adding them lowers every score: logistic PR-AUC falls from 0.041 (household) to 0.021, and boosted trees fall to near chance (0.011 to 0.013). Climate features alone give 0.012 (logistic) and 0.009 (XGBoost, below the 0.0096 baseline). Only three interview months exist, so these features vary mainly between clusters; with 58 positive clusters, flexible models fit cluster specific noise that does not carry to unseen clusters. The result is a negative finding for climate at this resolution and sample size, not evidence that climate is irrelevant to transmission.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{llccc}
+\toprule
+Features & Model & PR-AUC & ROC & Lift@20\%\\
+\midrule
+Household + dynamic & Logistic & .0213 & .698 & 2.21\\
+Household + dynamic & XGBoost & .0125 & .585 & 1.37\\
+HH + cluster means + dyn. & Logistic & .0194 & .696 & 2.09\\
+All static + dynamic & Logistic & .0136 & .624 & 1.51\\
+Dynamic only & Logistic & .0122 & .593 & 1.33\\
+Dynamic only & XGBoost & .0090 & .450 & 0.92\\
+\bottomrule
+\end{tabular}
+\caption{Pooled out-of-fold results with interview month climate (CHIRPS, ERA5-Land dewpoint, MODIS), 179 positives, baseline PR-AUC 0.0096. Best model without them: .0498 (Table~\ref{tab:pooled}).}
+\label{tab:dyn}
+\end{table}
+
+
 \section{Limitations and Supervisor Feedback}
 \label{sec:lim}
-We address four review points. (1) GPS displacement (urban up to 2~km, rural up to 5~km) is mitigated, not removed: climate values are 5~km cluster covariates for 2020, not buffer means from CHIRPS, ERA5 or MODIS (not reachable from the build environment), and are not matched to the interview month. (2) Normalized \texttt{hv005} weights are used in evaluation and both weighted and unweighted results are reported; weights are not used in training. (3) Calibration uses only out-of-fold predictions. (4) VIF reduction is restricted to the linear branch. Further limits: 179 positives in total, one survey round per model, and results that describe this survey only.
+We address four review points. (1) GPS displacement (urban up to 2~km, rural up to 5~km) is mitigated, not removed: the main models use DHS 5~km cluster covariates (2020 values). Interview month features from CHIRPS (5~km buffer), ERA5-Land and MODIS were added afterwards, but ERA5 supplied dewpoint only (0.1$^\circ$ grid, no buffer), MODIS values are 250~m pixel values with 10.6\% missing after quality filtering, and only three interview months exist. (2) Normalized \texttt{hv005} weights are used in evaluation and both weighted and unweighted results are reported; weights are not used in training. (3) Calibration uses only out-of-fold predictions. (4) VIF reduction is restricted to the linear branch. Further limits: 179 positives in total, one survey round per model, and results that describe this survey only.
 
-\section{Additional Data to Acquire}
-The largest remaining gap is that climate enters as one 2020 value per cluster. Table~\ref{tab:data} lists the next sources in priority order; none was reachable from the build environment, so each must be requested or downloaded by the project owner.
+\section{External Data Acquired and Still Needed}
+Table~\ref{tab:data} records the external sources, what was obtained, and what remains. Acquired files live in \texttt{data/external/} and are git-ignored because provider and DHS terms prohibit redistribution.
 
 \begin{table*}[t]
 \centering\footnotesize
 \renewcommand{\arraystretch}{1.1}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.2cm}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{1.6cm}}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}p{4.2cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{2.2cm}}
 \toprule
-Data & Source & Purpose and how it fixes a gap & Priority\\
+Data & Source & Purpose and status & Status\\
 \midrule
-Monthly rainfall, 1 to 3 month lags, buffer means (5 km) around each GPS cluster & CHIRPS \cite{funk2015}, Climate Hazards Center, free download or Google Earth Engine & Matches climate to the interview month (\texttt{hv006}, \texttt{hv007}) instead of a 2020 constant; addresses the GPS displacement feedback & 1\\
-Humidity, dewpoint, temperature & ERA5-Land \cite{munozsabater2021}, Copernicus Climate Data Store (free account) & Mosquito survival drivers beyond rainfall; monthly lags per cluster buffer & 1\\
-Vegetation (EVI, NDVI), 16 day & MODIS MOD13Q1 v061 \cite{didan2020}, NASA LP DAAC (free Earthdata login) & Breeding habitat proxy, lagged per cluster & 1\\
-Population denominators and district boundaries & NISR census 2022 \cite{nisr2022}; district shapefiles (NISR or GADM) & District roll-up of cluster risk for planning; exposure normalization & 2\\
-Monthly district malaria cases, 2014 to 2024 & Rwanda Biomedical Centre DHMIS bulletin \cite{rbc2024}; full series by formal request & Enables the time series early warning in the original proposal; independent validation of cluster risk & 2\\
-Rwanda DHS 2019--20 (PR, GE, GC) & DHS Program, same account (new request) & Third survey round (1.79\% RDT prevalence) for temporal validation & 3\\
-Housing and net coverage from MIS 2017 with GPS & DHS Program (GPS for 2017 must be requested separately) & Unlocks climate features for the 2017 round and a true pooled model & 3\\
+Monthly rainfall, lags 0 to 3, 5~km buffer around each GPS cluster & CHIRPS v3 \cite{funk2015}, Climate Hazards Center & July to December 2023 downloaded and joined by cluster and interview month (\texttt{src/climate\_features.py}) & Acquired (2023)\\
+Dewpoint temperature, monthly & ERA5-Land \cite{munozsabater2021}, Copernicus CDS & 2017 and 2023 files hold \texttt{d2m} only; 2~m temperature and total precipitation were not in the files and must be requested again & Partial\\
+Vegetation (EVI, NDVI), 16 day & MODIS MOD13Q1 v061 \cite{didan2020}, via AppEEARS & 170 clusters, 12 composites each, with quality flags; joined as monthly lags & Acquired\\
+Population denominators and district boundaries & NISR census 2022 \cite{nisr2022} & District roll-up of cluster risk and exposure normalization & Pending\\
+Monthly district malaria cases, 2014 to 2024 & Rwanda Biomedical Centre bulletin \cite{rbc2024}; full series by formal request & Enables the time series early warning in the original proposal and independent validation & Pending\\
+Rwanda DHS 2019--20 and MIS 2017 GPS & DHS Program (separate requests) & Third survey round (1.79\% RDT prevalence) and climate features for 2017 & Pending\\
 \bottomrule
 \end{tabularx}
-\caption{Data to download next, in priority order.}
+\caption{External data: acquired versus still needed.}
 \label{tab:data}
 \end{table*}
 
 \section{Conclusion}
-The pipeline is leakage free and fully auditable, but malaria positivity in MIS~2023 is dominated by a few clusters that household and coarse climate covariates only partly locate. The honest finding is a modest but real lift: the best out-of-fold model (regularized logistic regression on household features plus cluster context) ranks positives about five times better than chance in PR-AUC terms, with wide intervals. Matching climate to the interview month at cluster buffers (Table~\ref{tab:data}) is the next step.
+The pipeline is leakage free and fully auditable, but malaria positivity in MIS~2023 is dominated by a few clusters that household and coarse climate covariates only partly locate. The honest finding is a modest but real lift: the best out-of-fold model (regularized logistic regression on household features plus cluster context) ranks positives about five times better than chance in PR-AUC terms, with wide intervals. Interview month climate from CHIRPS, ERA5-Land and MODIS did not add skill at this sample size; more survey rounds with GPS, ERA5 temperature and rainfall, and district case series (Table~\ref{tab:data}) are the next steps.
 
 \clearpage
 \appendix

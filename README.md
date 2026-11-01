@@ -23,7 +23,7 @@ bed nets and indoor residual spraying (SDG 3, target 3.3).
 | Target | `hml35` (RDT result), 1 = positive | Binary, measured for every tested member. Codes 3, 4, 6 (invalid/indeterminate) are set to missing and dropped, never imputed. |
 | Size | N = 18,672 rows, P = 53 raw features (26 continuous, 22 nominal, 4 discrete, 1 ordinal) | Produced by `src/audit.py`, stored in `reports/audit_mis2023.json`. |
 | Imbalance | 0.96% positive (about 104:1 in the training split) | Drives the metric, split and calibration choices below. |
-| Climate | DHS geospatial covariates (5 km rasters, 2020 values) joined by cluster | Pragmatic stand-in: CHIRPS, ERA5 and MODIS were not reachable from the build environment. This is a documented deviation. |
+| Climate | DHS geospatial covariates (5 km rasters, 2020 values) joined by cluster | Main models use these. Interview-month features were added from CHIRPS v3 (5 km buffer), ERA5-Land dewpoint (only variable in the downloaded file) and MODIS EVI/NDVI (`src/climate_features.py`). They did not improve results (pooled PR-AUC 0.011-0.021 vs 0.050 without; `reports/pooled_dynamic_evaluation.json`). |
 
 Raw DHS files are licensed and are **not** in the repository (`data/raw/` is git-ignored).
 Request access at <https://dhsprogram.com>, then place the MIS 2023 files in `data/raw/mis2023/`.
@@ -155,7 +155,7 @@ jupyter nbconvert --to notebook --execute --inplace notebooks/pipeline_execution
 * Only 179 positives in total (143 train, 36 test): estimates are noisy; read intervals, not point values.
 * DHS GPS is displaced (urban up to 2 km, rural up to 5 km, 1% of rural up to 10 km), so cluster
   climate values carry location error. Using 5 km covariates partly absorbs this.
-* Climate values are single-year (2020) rasters, not matched to the survey month.
+* Main-model climate values are single-year (2020) rasters. Interview-month CHIRPS/ERA5/MODIS features exist but added no skill; ERA5 temperature and precipitation are still missing. Data goes in `data/external/` (git-ignored).
 * Calibration and thresholds describe this survey, not future years or other countries.
 * Survey-weighted results are reported alongside unweighted ones, but weights are not used in training.
 
