@@ -162,3 +162,13 @@ jupyter nbconvert --to notebook --execute --inplace notebooks/pipeline_execution
 ## 8. Data and license
 
 DHS microdata cannot be redistributed. Code is provided for research and public-health use.
+## Stage 2: tuning and robustness (`src/tuning.py`)
+
+Nested, repeated, cluster-grouped tuning of L2 and elastic-net logistic regression, shallow XGBoost, a rank-average
+ensemble and an extended cluster-context feature set (two split seeds). Result: **no reliable gain** over the fixed
+logistic model (household + cluster means, C=0.1; pooled PR-AUC 0.051-0.067, ROC-AUC 0.743-0.746 across seeds).
+ROC-AUC is flat (0.73-0.75) for C from 0.003 to 1; PR-AUC differences between settings are within split noise
+(a handful of positives in one cluster dominate it). The fixed model stays the recommended model. Outputs:
+`reports/tuning_means.json`, `reports/tuning_extended.json`, `reports/tuning_fixed_logistic_C.json`, `reports/tuning_c_path.json`.
+Run: `python -m src.tuning means` (or `extended`).
+
