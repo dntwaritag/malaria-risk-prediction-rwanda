@@ -1,0 +1,24 @@
+{
+  "train_rows": 13100,
+  "train_pos": 138,
+  "test_rows": 5572,
+  "test_pos": 41,
+  "train_clusters": 119,
+  "test_clusters": 51,
+  "overlap": 0,
+  "seed": 42,
+  "train_prev": 0.010534351145038168,
+  "test_prev": 0.007358219669777458,
+  "initial_N": 18672,
+  "initial_P": 53,
+  "train_final": [
+    13100,
+    96
+  ],
+  "test_final": [
+    5572,
+    96
+  ],
+  "nan_train": 0,
+  "nan_test": 0
+}

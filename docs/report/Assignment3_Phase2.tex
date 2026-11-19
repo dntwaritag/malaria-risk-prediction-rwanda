@@ -22,7 +22,7 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-We implement and audit a leakage free preprocessing and evaluation pipeline that predicts a positive malaria rapid diagnostic test (RDT) from household, demographic and climate covariates in the 2023 Rwanda Malaria Indicator Survey (MIS). Every planned Phase~1 decision is compared with what the data forced in Phase~2 and backed by a number and a figure; eight decisions changed, including the missing code convention, the treatment of structural missingness and the winsorizing rule for zero spread features. The matrix grows from $18{,}672\times53$ to $14{,}940\times95$ (train) with no missing cells. Positives are rare (0.96\%) and concentrated in a few clusters, so a 36 positive hold out is unreliable. Evaluating every one of the 179 positives out of fold under cluster grouped cross validation, a regularized logistic regression on household features plus cluster mean context reaches PR-AUC $0.050$ (5.2 times the $0.0096$ baseline) and ROC-AUC $0.72$, whereas boosted trees on the 2020 climate covariates reach only $0.015$ to $0.021$. Interview month climate features built from the newly downloaded CHIRPS v3 rainfall, ERA5-Land dewpoint and MODIS EVI and NDVI did not improve the result (PR-AUC $0.011$ to $0.021$), and the report states why. A further tuning and ensembling stage gave no reliable gain over the fixed logistic model. Wide intervals and the data still needed are reported. The original project proposal is reproduced in Appendix~A.
+We implement and audit a leakage free preprocessing and evaluation pipeline that predicts a positive malaria rapid diagnostic test (RDT) from household, demographic and climate covariates in the 2023 Rwanda Malaria Indicator Survey (MIS). Every planned Phase~1 decision is compared with what the data forced in Phase~2 and backed by a number and a figure; several decisions changed, including the missing code convention, the treatment of structural missingness, the winsorizing rule for zero spread features and a mutual information tie-breaker in the collinearity screen. The matrix grows from $18{,}672\times53$ to $13{,}100\times96$ (train) with no missing cells. Positives are rare (0.96\%) and concentrated in a few clusters, so a single hold-out is unreliable; the headline result is a repeated $5\times5$ cluster grouped out-of-fold evaluation over all 179 positives. A regularized logistic regression on household features plus cluster mean context reaches PR-AUC $0.080\pm0.032$ (8.3 times the $0.0096$ baseline) and ROC-AUC $0.748\pm0.013$, whereas boosted trees reach $0.025$ to $0.031$. Pooling MIS~2017 with a survey round indicator and covariate shift weights does not help because the two rounds are perfectly separable, a compact 33 column model raises events per variable from 1.8 to 4.3 but loses ranking skill, and interview month climate features from CHIRPS, ERA5-Land and MODIS do not improve the result. Intervals are wide, and the data still needed are reported. The original project proposal is reproduced in Appendix~A.
 \end{abstract}
 
 \section{Introduction}
@@ -31,9 +31,9 @@ Malaria remains a public health concern in Rwanda even after large reductions in
 \section{Data and Pipeline Output Verification}
 \textbf{Data.} The primary dataset is the Person Recode of MIS~2023 with cluster level geospatial covariates (5~km rasters, 2020 values) joined by cluster \cite{dhsguide}. The file has 19{,}038 rows; 366 have no valid test and are removed (the target is never imputed), leaving $N=18{,}672$ with $P=53$ features (26 continuous, 22 nominal, 4 discrete, 1 ordinal). Overall missingness is 1.77\% of cells; 9{,}933 rows are complete and 8{,}739 have at least one missing value.
 
-\textbf{Split.} A cluster grouped, label stratified split keeps every survey cluster on one side only (cluster overlap $=0$): train $14{,}940$ rows with 143 positives (0.957\%, imbalance 103.5:1), test $3{,}732$ rows with 36 positives (0.96\%). The split seed (51) was chosen by label balance only, never by model performance (seed 42 gave only 20 test positives).
+\textbf{Split.} The hold-out is a 70/30 cluster grouped split stratified by cluster burden tier (clusters with 0, 1--2 and 3 or more positives), so every survey cluster is on one side only (overlap $=0$): train $13{,}100$ rows in 119 clusters with 138 positives (1.053\%, imbalance 93.9:1) and test $5{,}572$ rows in 51 clusters with 41 positives (0.736\%). The seed (42) was fixed in advance and never searched, which removes the split selection optimism of the earlier 80/20 design that picked seed 51 because seed 42 gave only 20 test positives. The three largest clusters (39, 14 and 11 positives) all fall in the training part, which is why the test part holds 41 rather than the targeted 50 to 55 positives and a lower prevalence. Because any single hold-out depends on a few clusters, headline results use repeated $5\times5$ cluster grouped cross validation (Sec.~\ref{sec:res}).
 
-\textbf{Dimension verification.} Table~\ref{tab:dims} reports the matrix before and after the pipeline. No rows are deleted by outlier handling, and no information is discarded: all 53 raw features are retained and expanded to 95 model columns (ordinal and one hot encoding of 22 nominal columns, plus missing indicator flags). The correlation and VIF screen is applied \emph{only} on the linear model branch and removes 10 climate or terrain features, giving 85 columns there. PCA is used for diagnostics only; raw interpretable features are kept for classification.
+\textbf{Dimension verification.} Table~\ref{tab:dims} reports the matrix before and after the pipeline. No rows are deleted by outlier handling, and no information is discarded: all 53 raw features are retained and expanded to 96 model columns (ordinal and one hot encoding of 22 nominal columns, plus missing indicator flags). The correlation and VIF screen is applied \emph{only} on the linear model branch and removes 10 climate or terrain features, giving 86 columns there. PCA is used for diagnostics only; raw interpretable features are kept for classification.
 
 \begin{table}[t]
 \centering\small
@@ -42,9 +42,9 @@ Malaria remains a public health concern in Rwanda even after large reductions in
 Stage & Rows & Cols & NaN cells\\
 \midrule
 Raw model table & 18{,}672 & 53 & 1.77\%\\
-Train, preprocessed & 14{,}940 & 95 & 0\\
-Test, preprocessed & 3{,}732 & 95 & 0\\
-Linear branch (after screen) & 14{,}940 & 85 & 0\\
+Train, preprocessed & 13{,}100 & 96 & 0\\
+Test, preprocessed & 5{,}572 & 96 & 0\\
+Linear branch (after screen) & 13{,}100 & 86 & 0\\
 \bottomrule
 \end{tabular}
 \caption{Pipeline output verification (initial vs final $N\times P$). Train and test have identical column order; parameters are fit on train.}
@@ -64,19 +64,19 @@ Step & Phase 1 plan & Phase 2 actual & Evidence and figure\\
 Survey and unit & MIS 2017 or DHS 2019--20, children only & MIS 2023, all ages, age as a feature; MIS 2017 kept as secondary & Under 5 years gives only 24 positives of 2{,}412; MIS 2023 has GPS covariates, 2017 has none\\
 Missing codes & Sentinel 9 recoded to NaN & Codes 3, 4, 6 for \texttt{hml35} (6, 7 for \texttt{hml32}) recoded; 366 rows without valid test dropped & Value counts of the real file; code 9 never occurs\\
 Eligibility filter & Filter on \texttt{hv042}=1 and \texttt{hc1} age & \texttt{hv042} is hemoglobin selection and \texttt{hc1} is absent in PR, so filter on valid \texttt{hml35} instead & Codebook inspection\\
-Missingness mechanism & Test MCAR/MAR, then impute & \texttt{hml4}, \texttt{hml10} are missing by design (46.12\%, 6{,}891 of 14{,}940); explicit ``no net'' level plus indicator, no imputation & Little's MCAR $\chi^2=6984.3$, df=29, $p<0.001$; Cram\'er's $V=1.00$ with \texttt{hml12} (Fig.~\ref{fig:miss})\\
-Imputation & Mean if $|$skew$|<0.5$, else median; KNN if $>5\%$ missing & Median for skewed, mean for Gaussian, constant ``missing'' for nominal; no column exceeds 5\% except the structural pair; imputers keep indicators & 13 right skewed, 5 other skewed, 12 Gaussian columns (Fig.~\ref{fig:out})\\
-Outliers & IQR rule for skewed, Z-score for normal; winsorize & Same, plus a percentile fallback (1st/99th) when IQR$=0$ & \texttt{Frost\_Days\_2020}: Q1=Q3=0, plain rule flags 2{,}986 rows (19.99\%) and would flatten the feature to a constant (Fig.~\ref{fig:out})\\
-Association tests & Pearson/point biserial, Spearman or Mann--Whitney for skewed & Mutual information (MI) and point biserial with Spearman check; no switch needed & Largest $|\rho|-|r|$ gap is 0.013 (\texttt{hv040}: $\rho=-0.085$, $r=-0.072$); top MI only 0.016 nats (Fig.~\ref{fig:imp})\\
-Collinearity & $|r|\ge0.85$, then VIF$>10$, for linear and distance models, optional for trees & Applied to the logistic branch only; trees keep all features & 20 pairs with $|r|\ge0.85$ (Figs.~\ref{fig:corr}, \ref{fig:scatter}); 12 features with VIF$>10$; 10 dropped; max VIF falls to 7.54\\
-Transformation & MinMax scaling & log1p for right skewed, then standardization & \texttt{Livestock\_Goats} skew 4.12 $\to$ $-0.19$ (Fig.~\ref{fig:tf})\\
-Encoding & Wealth quintile $\{0..4\}$, one hot $\le10$ levels, target encoding for high cardinality & Explicit order, one hot with \texttt{drop=if\_binary}, rare levels $<1\%$ to ``Other''; no high cardinality column used & 22 nominal columns expand to the 95 model columns\\
-Split & Group by cluster, stratify & StratifiedGroupKFold, seed chosen by label balance & Overlap 0; 143/36 positives\\
-Imbalance & Class weights; SMOTE only if needed; threshold on validation & Class weights only; threshold on out-of-fold data (recall target 0.70) & 103.5:1; SMOTE not needed\\
-Calibration and weights & Planned & Platt and isotonic fit on out-of-fold predictions; weighted (\texttt{hv005}) and unweighted metrics & Brier 0.13 $\to$ 0.0094 for logistic (Table~\ref{tab:res})\\
-Model family and features & XGBoost, LightGBM or CatBoost on household plus climate features; logistic as baseline & Regularized logistic on household features plus cluster mean context is best out of fold; climate features lower PR-AUC (0.021 vs 0.041) & Pooled out-of-fold PR-AUC over 179 positives (Table~\ref{tab:pooled})\\
-Evaluation protocol & One 80/20 grouped hold-out & Hold-out kept, but headline numbers are pooled out-of-fold over all 18{,}672 rows & Hold-out has 36 positives from few clusters; one cluster holds 21.8\% of positives\\
-Climate source & CHIRPS, ERA5, MODIS buffer means & Main models: DHS 5~km covariates (2020 values). Added July to December 2023 interview month features: CHIRPS v3 (5~km buffer mean), ERA5-Land dewpoint, MODIS MOD13Q1 EVI and NDVI, lags 0 to 3 & Pooled PR-AUC with them 0.011 to 0.021 vs 0.050 without (Table~\ref{tab:dyn}); ERA5 file held dewpoint only; deviation in Sec.~\ref{sec:lim}\\
+Missingness mechanism & Test MCAR/MAR, then impute & \texttt{hml4}, \texttt{hml10} are missing by design (44.05\%, 5{,}770 of 13{,}100); explicit ``no net'' level plus indicator, no imputation & Little's MCAR $\chi^2=5997.2$, df=29, $p<0.001$; Cram\'er's $V=1.00$ with \texttt{hml12} (Fig.~\ref{fig:miss})\\
+Imputation & Mean if $|$skew$|<0.5$, else median; KNN if $>5\%$ missing & Median for skewed, mean for Gaussian, constant ``missing'' for nominal; no column exceeds 5\% except the structural pair; imputers keep indicators & 16 right skewed, 5 other skewed, 9 Gaussian columns (Fig.~\ref{fig:out})\\
+Outliers & IQR rule for skewed, Z-score for normal; winsorize & Same, plus a percentile fallback (1st/99th) when IQR$=0$ & \texttt{Frost\_Days\_2020}: Q1=Q3=0, plain rule flags 2{,}427 rows (18.53\%) and would flatten the feature to a constant (Fig.~\ref{fig:out})\\
+Association tests & Pearson/point biserial, Spearman or Mann--Whitney for skewed & Mutual information (MI) and point biserial with Spearman check; no switch needed & Largest $|\rho|-|r|$ gap is 0.009 (\texttt{hv040}: $\rho=-0.075$, $r=-0.066$); top MI only 0.017 nats (Fig.~\ref{fig:imp})\\
+Collinearity & $|r|\ge0.85$, then VIF$>10$, for linear and distance models, optional for trees & Applied to the logistic branch only; trees keep all features. Within a collinear pair, and when VIF exceeds 10, the feature with the lower mutual information with the target (averaged over 10 seeds) is dropped, replacing the earlier $|r|$ to target rule that discarded a high MI feature & 19 pairs with $|r|\ge0.85$ (Figs.~\ref{fig:corr}, \ref{fig:scatter}); 14 features with VIF$>10$; 10 dropped; max VIF falls to 8.47\\
+Transformation & MinMax scaling & log1p for right skewed, then standardization & \texttt{Livestock\_Cattle} skew 3.63 $\to$ 0.13 (Fig.~\ref{fig:tf})\\
+Encoding & Wealth quintile $\{0..4\}$, one hot $\le10$ levels, target encoding for high cardinality & Explicit order, one hot with \texttt{drop=if\_binary}, rare levels $<1\%$ to ``Other''; no high cardinality column used & 22 nominal columns expand to the 96 model columns\\
+Split & Group by cluster, stratify & 70/30 cluster split stratified by burden tier, fixed seed 42, no seed search; repeated 5$\times$5 grouped CV for headline results & Overlap 0; 138/41 positives (Sec.~\ref{sec:res})\\
+Imbalance & Class weights; SMOTE only if needed; threshold on validation & Class weights only; threshold on out-of-fold data (recall target 0.70) & 93.9:1 in training; SMOTE not needed\\
+Calibration and weights & Planned & Platt and isotonic fit on out-of-fold predictions; weighted (\texttt{hv005}) and unweighted metrics & Out-of-fold Brier 0.146 $\to$ 0.0104 for logistic after Platt scaling (Table~\ref{tab:res})\\
+Model family and features & XGBoost, LightGBM or CatBoost on household plus climate features; logistic as baseline & Regularized logistic on household features plus cluster mean context is best out of fold; climate features lower PR-AUC & Repeated 5$\times$5 out-of-fold PR-AUC over 179 positives: logistic 0.080 vs 0.028 (all features) and 0.025--0.031 (boosted trees) (Table~\ref{tab:pooled})\\
+Evaluation protocol & One 80/20 grouped hold-out & Hold-out kept (70/30, 41 positives), but headline numbers are repeated 5$\times$5 out-of-fold over all 18{,}672 rows & Hold-out depends on a few clusters; one cluster holds 21.8\% of positives\\
+Climate source & CHIRPS, ERA5, MODIS buffer means & Main models: DHS 5~km covariates (2020 values). Added July to December 2023 interview month features: CHIRPS v3 (5~km buffer mean), ERA5-Land dewpoint, MODIS MOD13Q1 EVI and NDVI, lags 0 to 3 & PR-AUC with them 0.011 to 0.021 vs 0.050 without on the same single partition (Table~\ref{tab:dyn}); ERA5 file held dewpoint only; deviation in Sec.~\ref{sec:lim}\\
 \bottomrule
 \end{tabularx}
 \caption{Decision log: Phase~1 plan versus Phase~2 execution with the numerical justification.}
@@ -85,16 +85,16 @@ Climate source & CHIRPS, ERA5, MODIS buffer means & Main models: DHS 5~km covari
 
 \section{Empirical Justification}
 \subsection{Missingness (Fig.~\ref{fig:miss}, \ref{fig:target})}
-Only \texttt{hml4} and \texttt{hml10} exceed the 1\% threshold (46.12\% each); their missingness is exactly the households with no bed net. Little's test on the numeric block \cite{little1988} rejects MCAR ($\chi^2=6984.3$, df $=29$, $p<0.001$, two patterns), and Cram\'er's $V$ of the missing indicator with other variables is 1.00 (\texttt{hml12}), 0.70 (\texttt{hv227}), 0.36 (province), 0.17 (wealth), 0.06 (residence) and 0.04 (sex). The value is absent because of a skip rule, so imputing it by the mean or median would invent bed nets. Figure~\ref{fig:target} shows the 103.5:1 imbalance, which fixes the metric choice (PR-AUC, not accuracy).
+Only \texttt{hml4} and \texttt{hml10} exceed the 1\% threshold (44.05\% each); their missingness is exactly the households with no bed net. Little's test on the numeric block \cite{little1988} rejects MCAR ($\chi^2=5997.2$, df $=29$, $p<0.001$, two patterns), and Cram\'er's $V$ of the missing indicator with other variables is 1.00 (\texttt{hml12}), 0.70 (\texttt{hv227}), 0.33 (province), 0.16 (wealth), 0.03 (residence) and 0.04 (sex). The value is absent because of a skip rule, so imputing it by the mean or median would invent bed nets. Figure~\ref{fig:target} shows the 93.9:1 imbalance in training, which fixes the metric choice (PR-AUC, not accuracy).
 
 \subsection{Outliers (Fig.~\ref{fig:out})}
-\texttt{Nightlights\_Composite} has skew 3.66 and kurtosis 13.89 (Q1 $=0$, Q3 $=0.095$, fences $[-0.142,\,0.237]$) and 3{,}046 flagged values (20.39\%). Age is mildly skewed (0.87; fences $[-33,\,79]$; 124 values, 0.83\%) and rooms per household has 718 flagged values (4.81\%). Capping keeps $N$ intact, which matters with 143 training positives. The \texttt{Frost\_Days\_2020} case is a genuine deviation: with Q1 $=$ Q3 $=0$ the fence is $[0,0]$ and the plain rule would remove all non-zero information, so the winsorizer uses percentile bounds when IQR is zero.
+\texttt{Nightlights\_Composite} has skew 3.48 and kurtosis 12.04 (Q1 $=0$, Q3 $=0.134$, fences $[-0.200,\,0.333]$) and 2{,}628 flagged values (20.06\%). Age is mildly skewed (0.87; fences $[-34.5,\,81.5]$; 88 values, 0.67\%) and rooms per household has 617 flagged values (4.71\%). Capping keeps $N$ intact, which matters with 138 training positives. The \texttt{Frost\_Days\_2020} case is a genuine deviation: with Q1 $=$ Q3 $=0$ the fence is $[0,0]$ and the plain rule would remove all non-zero information, so the winsorizer uses percentile bounds when IQR is zero.
 
 \subsection{Association and collinearity (Figs.~\ref{fig:corr}--\ref{fig:imp})}
-Twenty pairs reach $|r|\ge0.85$, the strongest being mean temperature with PET ($r=0.993$), maximum temperature ($0.989$) and minimum temperature ($0.983$), and precipitation with aridity ($0.981$). Before screening, 12 of 30 numeric features have VIF above 10 (maximum finite VIF about $4.5\times10^{12}$ for maximum temperature, $1.8\times10^{5}$ for mean temperature). The screen drops 10 features (nine by the $|r|$ rule, maximum temperature by VIF $=35.6$) and the maximum VIF falls to 7.54. Mutual information with the target is small for all features (top: land surface temperature 0.0162, wet days 0.0158, diurnal range 0.0156 nats). Because the rule keeps the feature with the larger $|r|$ to the target, land surface temperature (highest MI) was dropped; ranking by MI would have kept it, a documented limitation. Tree models are not screened. Multiple tests are corrected with Benjamini--Hochberg \cite{benjamini1995}; rankings are used for screening, not inference, because clustered data make naive $p$ values optimistic.
+Nineteen pairs reach $|r|\ge0.85$, the strongest being mean temperature with PET ($r=0.993$), maximum temperature ($0.988$) and minimum temperature ($0.981$), and precipitation with aridity ($0.981$). Before screening, 14 of 30 numeric features have VIF above 10 (maximum finite VIF about $4.3\times10^{12}$ for maximum temperature, $2.3\times10^{5}$ for mean temperature). Mutual information (MI) with the target is small and tightly bunched (0.0148 to 0.0170 nats). A single kNN MI estimate has a seed to seed spread of about 0.0006, as large as the gaps between features, so MI is averaged over 10 seeds. The previous screen kept the feature with the larger $|r|$ to the target, and so dropped land surface temperature although it had the highest single seed MI (0.0162). The screen now keeps the feature with the higher averaged MI in each collinear pair, and when VIF exceeds 10 it drops the least informative feature among those over the threshold. It removes 10 features (nine by the $|r|$ rule with MI tie-break, \texttt{Wet\_Days\_2020} at VIF $=17.9$), the maximum VIF falls to 8.47, and the two highest MI features (mean temperature, 0.0170, and precipitation, 0.0169) are retained. Land surface temperature (0.0166) still yields to its $|r|=0.98$ twin, daytime land surface temperature (0.0167); the two differ by less than the estimator noise, so either is a valid representative. Tree models are not screened. Multiple tests are corrected with Benjamini--Hochberg \cite{benjamini1995}; rankings are used for screening, not inference, because clustered data make naive $p$ values optimistic.
 
 \subsection{Transformations and PCA (Figs.~\ref{fig:tf}, \ref{fig:pca})}
-For \texttt{Livestock\_Goats}, log1p reduces skew from 4.12 to $-0.19$ (mean 90.1 to 4.25, sd 79.3 to 0.73); min-max gives mean 0.53, sd 0.15; standardization gives mean 0, sd 1. PCA on the 30 scaled numeric features has leading eigenvalues $11.58, 4.14, 2.52, 1.75, 1.56$ (variance $38.6\%, 13.8\%, 8.4\%, 5.8\%, 5.2\%$); 12 components reach 90\% and 15 reach 95\%. This shows strong redundancy among climate variables, but raw features are retained for interpretability.
+For \texttt{Livestock\_Cattle}, log1p reduces skew from 3.63 to 0.13 (mean 49.4 to 3.59, sd 51.9 to 0.79); min-max gives mean 0.50, sd 0.17; standardization gives mean 0, sd 1. PCA on the 30 scaled numeric features has leading eigenvalues $11.52, 4.10, 2.45, 1.77, 1.63$ (variance $38.4\%, 13.7\%, 8.2\%, 5.9\%, 5.4\%$); 12 components reach 90\% and 15 reach 95\%. This shows strong redundancy among climate variables, but raw features are retained for interpretability.
 
 \begin{figure*}[!t]
 \centering
@@ -129,7 +129,7 @@ For \texttt{Livestock\_Goats}, log1p reduces skew from 4.12 to $-0.19$ (mean 90.
 \begin{figure}[!t]
 \centering
 \includegraphics[width=\columnwidth]{\figdir fig4_1_transformation_grid.png}
-\caption{\texttt{Livestock\_Goats}: raw, log1p, min-max and standardized.}\label{fig:tf}
+\caption{\texttt{Livestock\_Cattle}: raw, log1p, min-max and standardized.}\label{fig:tf}
 \end{figure}
 \begin{figure}[!t]
 \centering
@@ -142,10 +142,11 @@ For \texttt{Livestock\_Goats}, log1p reduces skew from 4.12 to $-0.19$ (mean 90.
 
 
 \section{Leakage Free Architecture}
-All steps are inside \texttt{Pipeline} and \texttt{ColumnTransformer} objects (sentinel recoder, winsorizers, imputers with indicators, log1p, scaler, rare level grouping, one hot and ordinal encoders, optional collinearity screen). Training skewness decides each column's branch, and every threshold, median, mean, standard deviation and capping bound is learned from \texttt{X\_train} only and applied unchanged to test data. Cross validation uses cluster grouped, label stratified folds. Calibrators and operating thresholds are fit on out-of-fold predictions. The second malaria test, test-process variables, modelled malaria columns, anemia and treatment variables, identifiers are excluded as leakage, and the survey weight is used only in evaluation, never as a feature.
+All steps are inside \texttt{Pipeline} and \texttt{ColumnTransformer} objects (sentinel recoder, winsorizers, imputers with indicators, log1p, scaler, rare level grouping, one hot and ordinal encoders, optional collinearity screen). Training skewness decides each column's branch, and every threshold, median, mean, standard deviation and capping bound is learned from \texttt{X\_train} only and applied unchanged to test data. Cross validation uses repeated cluster grouped, label stratified folds. Calibrators and operating thresholds are fit on out-of-fold predictions. The second malaria test, test-process variables, modelled malaria columns, anemia and treatment variables, identifiers are excluded as leakage, and the survey weight is used only in evaluation, never as a feature.
 
 \section{Model Results, Diagnosis and Improvement}
-\textbf{Hold-out results.} Candidate models are regularized logistic regression, random forest, LightGBM \cite{ke2017} and XGBoost \cite{chen2016}, all with class weights; probabilities are calibrated with Platt scaling \cite{platt1999}. Table~\ref{tab:res} gives the 20\% cluster grouped hold-out. XGBoost has the best hold-out PR-AUC (0.0203; weighted 0.0193; out-of-fold 0.0455), but with 36 positives its 95\% interval $[0.005, 0.064]$ overlaps every other model.
+\label{sec:res}
+\textbf{Hold-out results.} Candidate models are regularized logistic regression, random forest, LightGBM \cite{ke2017} and XGBoost \cite{chen2016}, all with class weights; probabilities are calibrated with Platt scaling \cite{platt1999}. Table~\ref{tab:res} gives the 30\% cluster grouped hold-out. Random forest has the best hold-out PR-AUC (0.0326; weighted 0.0320) and LightGBM the best ROC-AUC (0.760), but with 41 positives the 95\% intervals (for example $[0.008, 0.079]$ for random forest) overlap every model and the ordering differs from the repeated cross validation below, so we do not rank models on this split.
 
 \begin{table}[t]
 \centering\small
@@ -153,43 +154,77 @@ All steps are inside \texttt{Pipeline} and \texttt{ColumnTransformer} objects (s
 \toprule
 Model & PR-AUC & ROC & Brier & Recall\\
 \midrule
-Logistic & .0132 & .546 & .0096 & .53\\
-Random forest & .0138 & .625 & .0096 & .47\\
-LightGBM & .0156 & .656 & .0097 & .75\\
-XGBoost & .0203 & .643 & .0096 & .64\\
+Logistic & .0203 & .699 & .0073 & .88\\
+Random forest & .0326 & .733 & .0073 & .73\\
+LightGBM & .0237 & .760 & .0073 & .93\\
+XGBoost & .0255 & .745 & .0073 & .88\\
 \midrule
-Baseline & .0096 & .500 & & \\
+Baseline & .0074 & .500 & & \\
 \bottomrule
 \end{tabular}
-\caption{Hold-out test (3{,}732 rows, 36 positives), Platt calibrated, unweighted. Weighted PR-AUC: .0130, .0129, .0150, .0193.}
+\caption{Hold-out test (5{,}572 rows, 41 positives), Platt calibrated, unweighted. Weighted PR-AUC: .0203, .0320, .0223, .0246.}
 \label{tab:res}
 \end{table}
 
-\textbf{Diagnosis.} The weak scores are not a coding error. Out-of-fold and hold-out ROC-AUC differ (0.75 vs 0.64) because grouped splits remove cluster memorization, and the cause is the data. Only 58 of 170 clusters contain any positive; one cluster holds 39 of 179 positives (21.8\%) and the top three hold 35.8\%. Prevalence by province code ranges from 0.35\% to 2.08\%, by age from 0.68\% to 1.22\%. A 36 positive hold-out therefore reflects a handful of clusters. Climate covariates are constant within a cluster, so a flexible model can memorize the 170 distinct climate profiles, which does not transfer to unseen clusters. A model predicting which clusters contain a positive reaches ROC-AUC only $0.52\pm0.03$ (logistic) and $0.58\pm0.03$ (random forest).
+\textbf{Diagnosis.} The weak hold-out scores are not a coding error. Grouped splits remove cluster memorization, and the cause is the data. Only 58 of 170 clusters contain any positive; one cluster holds 39 of 179 positives (21.8\%) and the top three hold 35.8\%. Prevalence by province code ranges from 0.35\% to 2.08\%, by age from 0.68\% to 1.22\%. A 41 positive hold-out therefore reflects a handful of clusters; the three largest all fall in training, so test prevalence (0.74\%) is below training prevalence (1.05\%). Climate covariates are constant within a cluster, so a flexible model can memorize the 170 distinct climate profiles, which does not transfer to unseen clusters. A model predicting which clusters contain a positive reaches ROC-AUC only $0.52\pm0.03$ (logistic) and $0.58\pm0.03$ (random forest).
 
-\textbf{Improved evaluation and model.} To use all 179 positives, every person is predicted once by a model that never saw their cluster (5-fold cluster grouped, label stratified, pooled over 18{,}672 rows; Table~\ref{tab:pooled}). Five configurations were fixed in advance. Dropping the climate covariates and keeping 30 household features raises logistic PR-AUC from 0.021 to 0.041; adding cluster mean age, wealth score, household size, rooms and nets (label free context) raises it to \textbf{0.050} (ROC-AUC 0.72, weighted PR-AUC 0.048; the top 20\% highest scores capture 49\% of positives, a lift of 2.5). Tree models do not benefit, and adding all of MIS~2017 (1{,}765 positives, no climate) lowers logistic PR-AUC to 0.016, so survey round shift outweighs the extra positives. Training on 2017 alone and testing on all of 2023 gives PR-AUC 0.015 to 0.021. All intervals are wide (best model $[0.009, 0.137]$) and the five configurations were compared on the same data, so some optimism remains; the ranking of logistic over boosted trees is suggestive, not proven.
+\textbf{Headline evaluation: repeated cross validation.} To use all 179 positives and to avoid choosing a favourable seed, every person is predicted once per repeat by a model that never saw their cluster, using 5 repeats of 5-fold \texttt{StratifiedGroupKFold} (seeds 100 to 104, fixed in advance) over 18{,}672 rows (Table~\ref{tab:pooled}); metrics are averaged over repeats and the standard deviation across repeats is reported. Dropping the climate covariates and keeping 30 household features raises logistic PR-AUC from 0.028 to 0.070; adding cluster mean age, wealth score, household size, rooms and nets (label free context) raises it to \textbf{0.080 $\pm$ 0.032} (ROC-AUC $0.748\pm0.013$; the top 20\% highest scores capture 57\% of positives, a lift of 2.9). The large spread across repeats (individual partitions give 0.05 to 0.13) shows how strongly PR-AUC depends on which clusters share a fold; ROC-AUC is much more stable. Boosted trees do not benefit from the extra features (0.025 to 0.031) and are less stable across partitions of the same data than logistic regression is across features, consistent with cluster memorization.
+
+\begin{table*}[t]
+\centering\footnotesize
+\begin{tabular}{llcccc}
+\toprule
+Features & Model & PR-AUC (mean $\pm$ sd) & ROC-AUC & Columns & EPV\\
+\midrule
+A. All 53 features & Logistic & .028 $\pm$ .007 & .688 & 86 & 1.7\\
+ & XGBoost & .024 $\pm$ .003 & .709 & 96 & 1.5\\
+B. Household (30) & Logistic & .070 $\pm$ .028 & .747 & 73 & 1.9\\
+ & XGBoost & .031 $\pm$ .004 & .739 & 73 & 1.9\\
+C. Household + cluster means & Logistic & \textbf{.080 $\pm$ .032} & \textbf{.748} & 78 & 1.8\\
+ & XGBoost & .025 $\pm$ .001 & .702 & 78 & 1.8\\
+D. B + MIS 2017, unweighted & Logistic & .023 $\pm$ .001 & .678 & 93 & 1.5\\
+ & XGBoost & .024 $\pm$ .004 & .726 & 93 & 1.5\\
+E. D + survey round indicator & Logistic & .023 $\pm$ .002 & .679 & 94 & 1.5\\
+ & XGBoost & .024 $\pm$ .002 & .717 & 94 & 1.5\\
+F. E + covariate shift weights & Logistic & .022 $\pm$ .002 & .672 & 94 & 1.5\\
+ & XGBoost & .026 $\pm$ .002 & .718 & 94 & 1.5\\
+G. Compact + cluster means & Logistic & .024 $\pm$ .004 & .703 & 33 & 4.3\\
+ & XGBoost & .019 $\pm$ .001 & .666 & 33 & 4.3\\
+H. Compact, no context & Logistic & .027 $\pm$ .005 & .713 & 28 & 5.1\\
+ & XGBoost & .023 $\pm$ .002 & .701 & 28 & 5.1\\
+\bottomrule
+\end{tabular}
+\caption{Repeated $5\times5$ cluster grouped out-of-fold results over all 179 positives (baseline PR-AUC 0.0096). Columns are model columns after preprocessing and screening; EPV is training positives (about 143 per fold) divided by columns. LightGBM matches XGBoost to within 0.003 PR-AUC where run (A, B, C, G, H).}
+\label{tab:pooled}
+\end{table*}
+
+\textbf{Training and test sizes, and events per variable.} A 20\% hold-out contained only 36 positives from few clusters (95\% PR-AUC interval $[0.005,0.064]$) and its seed had been chosen by label balance, so we replaced it by a burden tier stratified 70/30 split with a fixed seed (41 test positives) and, for headline claims, by the repeated cross validation above. The events per variable (EPV) ratio is the second bottleneck: with about 143 training positives, the full feature sets give EPV 1.5 to 1.9, far below the usual benchmark of 10 \cite{peduzzi1996}. A compact set that drops the seven nominal features with more than three levels (water source, wall, toilet, province, cooking fuel, floor, net type) has 33 columns (EPV 4.3), and 28 columns without cluster means (EPV 5.1). Ranking skill falls (logistic ROC-AUC 0.70 to 0.71 against 0.75), so the excluded housing and geography columns carry signal that cluster means do not replace. We keep the regularized household plus cluster mean model because it ranks best, and state plainly that its EPV is low; L2 regularization limits but does not remove the overfitting risk. The principled fix is more events, for example the RBC monthly district case series.
+
+\textbf{Survey round pooling.} Adding MIS~2017 (1{,}765 positives) lowers logistic PR-AUC from 0.070 to 0.023 (Table~\ref{tab:pooled}, D). A domain classifier trained on household covariates separates the two rounds with cross validated AUC 1.00, mainly through the altitude indicator (\texttt{hv040} is missing for every 2017 row because MIS~2017 has no GPS) and cooking fuel codes (\texttt{hv226}, coded differently across rounds). Adding an explicit survey round indicator (E) and importance weights from the domain classifier (F; weights $p(2023|x)/p(2017|x)$ fitted on training folds only, normalized and clipped to $[0.1,10]$) does not recover performance (logistic 0.023 and 0.022), because weighting cannot transport rows between covariate distributions that do not overlap or are coded differently. Training on 2017 alone and testing on all of 2023 gives PR-AUC 0.015 to 0.021. For DHS 2019--20 we will harmonize variable codes first, then use a round indicator with covariate shift weights.
 
 \begin{table}[t]
-\centering\small
-\begin{tabular}{p{3.3cm}p{2.5cm}cc}
+\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}p{2.3cm}cc}
 \toprule
 Step & Change & PR-AUC & Gain\\
 \midrule
 Random baseline & none & .0096 & 1.0$\times$\\
-Hold-out, best (XGBoost) & 36 positives & .0203 & 2.1$\times$\\
-Pooled, all features & 179 positives, grouped CV & .0211 & 2.2$\times$\\
-+ household features only & drop climate & .0408 & 4.3$\times$\\
-+ cluster mean context & label free & \textbf{.0498} & \textbf{5.2$\times$}\\
-+ interview month climate & CHIRPS, ERA5, MODIS & .0194 & 2.0$\times$\\
+Hold-out, best (RF) & 70/30, 41 pos. & .0326 & 4.4$\times^{a}$\\
+Pooled, all features & repeated CV & .0275 & 2.9$\times$\\
++ household features only & drop climate & .0697 & 7.3$\times$\\
++ cluster mean context & label free & \textbf{.0799} & \textbf{8.3$\times$}\\
+Compact, 33 columns & EPV 4.3 & .0235 & 2.4$\times$\\
++ MIS 2017 pooling & indicator, weights & .0222 & 2.3$\times$\\
++ month climate & CHIRPS, ERA5, MODIS & .0194$^{b}$ & 2.0$\times$\\
 \bottomrule
 \end{tabular}
-\caption{Improvement path (logistic regression unless stated). The last row was tested and rejected.}
+\caption{Improvement path (logistic regression unless stated). The last three rows were tested and rejected. $^{a}$Relative to the hold-out prevalence 0.0074. $^{b}$Single 5-fold partition (Table~\ref{tab:dyn}); the same partition gave 0.050 without climate.}
 \label{tab:path}
 \end{table}
 
 Table~\ref{tab:path} summarizes the path: each retained step is justified by out-of-fold evidence, and the final step shows that a plausible improvement was tested and discarded rather than assumed.
 
-\textbf{Stage 2: tuning, ensembling and robustness.} We then tested whether tuning could beat the fixed setting. Hyperparameters were chosen by an inner cluster grouped 3-fold search on each outer training fold, with the whole procedure repeated for two split seeds (Table~\ref{tab:stage2}). L2 and elastic net logistic regression, shallow gradient boosting, a rank average ensemble, and an extended set of label free cluster context features (means of all numeric household variables, wealth spread, cluster size) all scored below the fixed logistic regression on ROC-AUC, and none exceeded it on PR-AUC. The tuned scores are lower partly because the selected penalty differed across folds (from $C=0.001$ to $0.3$), which makes pooled out-of-fold scores less comparable; this is a likely explanation and was not isolated. A sweep of the penalty strength with the same folds shows ROC-AUC flat between 0.73 and 0.75 for $C$ from 0.003 to 1, while PR-AUC moves between 0.036 and 0.082 on one seed and peaks at different values on the other, so differences between settings are within split noise. Averaged over the two seeds, the fixed model ($C=0.1$) reaches PR-AUC 0.059 and ROC-AUC 0.745, consistent with the 0.050 reported above (the small difference reflects library versions and fold assignment). We therefore keep the pre-specified model and report that tuning gave no reliable gain.
+\textbf{Stage 2: tuning, ensembling and robustness.} We then tested whether tuning could beat the fixed setting. Hyperparameters were chosen by an inner cluster grouped 3-fold search on each outer training fold, with the whole procedure repeated for two split seeds (Table~\ref{tab:stage2}). L2 and elastic net logistic regression, shallow gradient boosting, a rank average ensemble, and an extended set of label free cluster context features (means of all numeric household variables, wealth spread, cluster size) all scored below the fixed logistic regression on ROC-AUC, and none exceeded it on PR-AUC. The tuned scores are lower partly because the selected penalty differed across folds (from $C=0.001$ to $0.3$), which makes pooled out-of-fold scores less comparable; this is a likely explanation and was not isolated. A sweep of the penalty strength with the same folds shows ROC-AUC flat between 0.73 and 0.75 for $C$ from 0.003 to 1, while PR-AUC moves between 0.036 and 0.082 on one seed and peaks at different values on the other, so differences between settings are within split noise. Averaged over the two seeds, the fixed model ($C=0.1$) reaches PR-AUC 0.059 and ROC-AUC 0.745, inside the range of the repeated cross validation estimate of $0.080\pm0.032$ (individual partitions vary from 0.05 to 0.13, so the repeated mean is the number to quote). We therefore keep the pre-specified model and report that tuning gave no reliable gain.
 
 \begin{table}[t]
 \centering\small
@@ -210,50 +245,32 @@ Extended context, L2 & .033 & .025 & .716 & .689\\
 \label{tab:stage2}
 \end{table}
 
-\begin{table}[t]
-\centering\small
-\begin{tabular}{llccc}
-\toprule
-Config & Model & PR-AUC & ROC & Lift@20\%\\
-\midrule
-A all feats & Logistic & .0211 & .690 & 2.18\\
-A all feats & XGBoost & .0162 & .654 & 1.79\\
-B household & Logistic & .0408 & .717 & 2.57\\
-B household & XGBoost & .0228 & .693 & 2.26\\
-C B + cluster means & Logistic & \textbf{.0498} & .717 & 2.46\\
-C B + cluster means & LightGBM & .0189 & .673 & 2.09\\
-D B + MIS 2017 & Logistic & .0159 & .639 & 1.90\\
-D B + MIS 2017 & LightGBM & .0192 & .676 & 1.87\\
-\bottomrule
-\end{tabular}
-\caption{Pooled out-of-fold results over all 179 MIS 2023 positives (baseline PR-AUC 0.0096). Selected rows; all 15 model and configuration pairs are in \texttt{reports/pooled\_evaluation.json}.}
-\label{tab:pooled}
-\end{table}
-
-\textbf{Interview month climate features.} After the first submission draft we downloaded CHIRPS v3 monthly rainfall (mean of pixels within 5~km of each displaced cluster point), ERA5-Land monthly 2~m dewpoint temperature (0.1$^\circ$ cell; the downloaded file contained dewpoint only, not temperature or rainfall) and MODIS MOD13Q1 EVI and NDVI composites (AppEEARS, quality filtered, 10.6\% of interview month values missing after filtering). MIS~2023 interviews ran October to December 2023, so lags 0 to 3 months cover July to December 2023. Table~\ref{tab:dyn} shows that adding them lowers every score: logistic PR-AUC falls from 0.041 (household) to 0.021, and boosted trees fall to near chance (0.011 to 0.013). Climate features alone give 0.012 (logistic) and 0.009 (XGBoost, below the 0.0096 baseline). Only three interview months exist, so these features vary mainly between clusters; with 58 positive clusters, flexible models fit cluster specific noise that does not carry to unseen clusters. The result is a negative finding for climate at this resolution and sample size, not evidence that climate is irrelevant to transmission.
+\textbf{Interview month climate features.} After the first submission draft we downloaded CHIRPS v3 monthly rainfall (mean of pixels within 5~km of each displaced cluster point), ERA5-Land monthly 2~m dewpoint temperature (0.1$^\circ$ cell; the downloaded file contained dewpoint only, not temperature or rainfall) and MODIS MOD13Q1 EVI and NDVI composites (AppEEARS, quality filtered, 10.6\% of interview month values missing after filtering). MIS~2023 interviews ran October to December 2023, so lags 0 to 3 months cover July to December 2023. Table~\ref{tab:dyn} (one 5-fold partition) shows that adding them lowers every score: logistic PR-AUC falls from 0.041 (household) to 0.021, and boosted trees fall to near chance (0.011 to 0.013). Climate features alone give 0.012 (logistic) and 0.009 (XGBoost, below the 0.0096 baseline). Only three interview months exist, so these features vary mainly between clusters; with 58 positive clusters, flexible models fit cluster specific noise that does not carry to unseen clusters. The result is a negative finding for climate at this resolution and sample size, not evidence that climate is irrelevant to transmission.
 
 \begin{table}[t]
-\centering\small
+\centering\footnotesize\setlength{\tabcolsep}{3pt}
 \begin{tabular}{llccc}
 \toprule
-Features & Model & PR-AUC & ROC & Lift@20\%\\
+Features & Model & PR-AUC & ROC & Lift\\
 \midrule
-Household + dynamic & Logistic & .0213 & .698 & 2.21\\
-Household + dynamic & XGBoost & .0125 & .585 & 1.37\\
-HH + cluster means + dyn. & Logistic & .0194 & .696 & 2.09\\
-All static + dynamic & Logistic & .0136 & .624 & 1.51\\
+HH + dynamic & Logistic & .0213 & .698 & 2.21\\
+HH + dynamic & XGBoost & .0125 & .585 & 1.37\\
+HH + means + dyn. & Logistic & .0194 & .696 & 2.09\\
+All + dynamic & Logistic & .0136 & .624 & 1.51\\
 Dynamic only & Logistic & .0122 & .593 & 1.33\\
 Dynamic only & XGBoost & .0090 & .450 & 0.92\\
 \bottomrule
 \end{tabular}
-\caption{Pooled out-of-fold results with interview month climate (CHIRPS, ERA5-Land dewpoint, MODIS), 179 positives, baseline PR-AUC 0.0096. Best model without them: .0498 (Table~\ref{tab:pooled}).}
+\caption{Pooled out-of-fold results with interview month climate (CHIRPS, ERA5-Land dewpoint, MODIS), 179 positives, baseline PR-AUC 0.0096. On the same partition the household plus cluster mean logistic model scored .0498. One partition only: the raster files were not rerun under repeated cross validation.}
 \label{tab:dyn}
 \end{table}
 
 
 \section{Limitations and Supervisor Feedback}
 \label{sec:lim}
-We address four review points. (1) GPS displacement (urban up to 2~km, rural up to 5~km) is mitigated, not removed: the main models use DHS 5~km cluster covariates (2020 values). Interview month features from CHIRPS (5~km buffer), ERA5-Land and MODIS were added afterwards, but ERA5 supplied dewpoint only (0.1$^\circ$ grid, no buffer), MODIS values are 250~m pixel values with 10.6\% missing after quality filtering, and only three interview months exist. (2) Normalized \texttt{hv005} weights are used in evaluation and both weighted and unweighted results are reported; weights are not used in training. (3) Calibration uses only out-of-fold predictions. (4) VIF reduction is restricted to the linear branch. Further limits: 179 positives in total, one survey round per model, and results that describe this survey only.
+We address the supervisor comments one by one. \textbf{Reanalysis climate and temporal mismatch.} The ERA5-Land files contained dewpoint only (no 2~m temperature or total precipitation), MODIS EVI and NDVI have 10.6\% missing values after quality filtering, and the interviews cover only three months (October to December 2023), so climate varies mainly between clusters and flexible models can memorize cluster specific noise. This is the likely reason climate features lowered PR-AUC. We keep the DHS 5~km covariates (2020 values) in the main models, and list the full ERA5-Land download (temperature and precipitation) and DHS 2019--20 as the priority acquisitions before Phase~3 (Table~\ref{tab:data}); we have not yet re-downloaded them. \textbf{Collinearity screen.} The screen now ranks by mutual information instead of $|r|$ to the target in both steps (Sec.~4.3). All MI values lie in 0.0148 to 0.0170, within estimator noise, so we average over 10 seeds and report that near ties are decided arbitrarily. \textbf{Survey round shift.} Round indicators and covariate shift weights were implemented and tested (Table~\ref{tab:pooled}, E and F); because the 2017 and 2023 covariates are perfectly separable and partly coded differently, pooling still lowers PR-AUC, and code harmonization is a prerequisite for DHS 2019--20. \textbf{Training and test sizes.} The 80/20 hold-out with seed selection was replaced by a fixed seed burden tier 70/30 split and a repeated $5\times5$ cluster grouped cross validation; the burden tier split gives 41 test positives, below the 50 to 55 suggested, because the three largest clusters fell in training and we did not search seeds. \textbf{Events per variable.} EPV is 1.5 to 1.9 for the full feature sets and 4.3 to 5.1 for the compact sets (Table~\ref{tab:pooled}), below the benchmark of 10; the compact sets lose ranking skill, so the best model remains the regularized household plus cluster mean logistic regression with an acknowledged low EPV. We did not reproduce the interview month climate comparison under repeated cross validation.
+
+Earlier review points still hold. GPS displacement (urban up to 2~km, rural up to 5~km) is mitigated by 5~km covariates, not removed. Normalized \texttt{hv005} weights are used in evaluation only, and weighted and unweighted results are reported. Calibration uses only out-of-fold predictions. VIF reduction is restricted to the linear branch. Further limits: 179 positives in total, one survey round per primary model, and results that describe this survey only.
 
 \section{External Data Acquired and Still Needed}
 Table~\ref{tab:data} records the external sources, what was obtained, and what remains. Acquired files live in \texttt{data/external/} and are git-ignored because provider and DHS terms prohibit redistribution.
@@ -266,11 +283,11 @@ Table~\ref{tab:data} records the external sources, what was obtained, and what r
 Data & Source & Purpose and status & Status\\
 \midrule
 Monthly rainfall, lags 0 to 3, 5~km buffer around each GPS cluster & CHIRPS v3 \cite{funk2015}, Climate Hazards Center & July to December 2023 downloaded and joined by cluster and interview month (\texttt{src/climate\_features.py}) & Acquired (2023)\\
-Dewpoint temperature, monthly & ERA5-Land \cite{munozsabater2021}, Copernicus CDS & 2017 and 2023 files hold \texttt{d2m} only; 2~m temperature and total precipitation were not in the files and must be requested again & Partial\\
+Dewpoint temperature, monthly & ERA5-Land \cite{munozsabater2021}, Copernicus CDS & 2017 and 2023 files hold \texttt{d2m} only; 2~m temperature and total precipitation were not in the files and must be re-downloaded before Phase~3 & Partial\\
 Vegetation (EVI, NDVI), 16 day & MODIS MOD13Q1 v061 \cite{didan2020}, via AppEEARS & 170 clusters, 12 composites each, with quality flags; joined as monthly lags & Acquired\\
 Population denominators and district boundaries & NISR census 2022 \cite{nisr2022} & District roll-up of cluster risk and exposure normalization & Pending\\
 Monthly district malaria cases, 2014 to 2024 & Rwanda Biomedical Centre bulletin \cite{rbc2024}; full series by formal request & Enables the time series early warning in the original proposal and independent validation & Pending\\
-Rwanda DHS 2019--20 and MIS 2017 GPS & DHS Program (separate requests) & Third survey round (1.79\% RDT prevalence) and climate features for 2017 & Pending\\
+Rwanda DHS 2019--20 and MIS 2017 GPS & DHS Program (separate requests) & Third survey round (1.79\% RDT prevalence) and climate features for 2017; to be pooled with a round indicator and covariate shift weights after code harmonization & Pending (priority)\\
 \bottomrule
 \end{tabularx}
 \caption{External data: acquired versus still needed.}
@@ -278,7 +295,7 @@ Rwanda DHS 2019--20 and MIS 2017 GPS & DHS Program (separate requests) & Third s
 \end{table*}
 
 \section{Conclusion}
-The pipeline is leakage free and fully auditable, but malaria positivity in MIS~2023 is dominated by a few clusters that household and coarse climate covariates only partly locate. The honest finding is a modest but real lift: the best out-of-fold model (regularized logistic regression on household features plus cluster context) ranks positives about five times better than chance in PR-AUC terms, with wide intervals. Interview month climate from CHIRPS, ERA5-Land and MODIS did not add skill at this sample size; more survey rounds with GPS, ERA5 temperature and rainfall, and district case series (Table~\ref{tab:data}) are the next steps.
+The pipeline is leakage free and fully auditable, but malaria positivity in MIS~2023 is dominated by a few clusters that household and coarse climate covariates only partly locate. The honest finding is a modest but real lift: under repeated cluster grouped cross validation the best model (regularized logistic regression on household features plus cluster context) reaches PR-AUC $0.080\pm0.032$, about eight times the baseline, with ROC-AUC 0.75 and wide intervals. Survey round pooling, compact feature sets, interview month climate from CHIRPS, ERA5-Land and MODIS, and tuning did not add reliable skill at this sample size. Before Phase~3 the priorities are the full ERA5-Land variable set, harmonized DHS 2019--20 data with a round indicator and covariate shift weights, and the RBC district case series, which would raise the number of events (Table~\ref{tab:data}).
 
 \clearpage
 \appendix
@@ -353,11 +370,12 @@ All data sources proposed for this project are aggregate and publicly released, 
 \bibitem{ke2017} G. Ke \textit{et al.}, ``LightGBM: A highly efficient gradient boosting decision tree,'' in \textit{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)}, vol. 30, 2017.
 \bibitem{chen2016} T. Chen and C. Guestrin, ``XGBoost: A scalable tree boosting system,'' in \textit{Proc. 22nd ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining}, 2016, pp. 785--794.
 \bibitem{platt1999} J. C. Platt, ``Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods,'' in \textit{Advances in Large Margin Classifiers}, A. J. Smola \textit{et al.}, Eds. Cambridge, MA, USA: MIT Press, 1999, pp. 61--74.
+\bibitem{peduzzi1996} P. Peduzzi, J. Concato, E. Kemper, T. R. Holford, and A. R. Feinstein, ``A simulation study of the number of events per variable in logistic regression analysis,'' \textit{J. Clin. Epidemiol.}, vol. 49, no. 12, pp. 1373--1379, 1996.
 \bibitem{funk2015} C. Funk \textit{et al.}, ``The climate hazards infrared precipitation with stations---a new environmental record for monitoring extremes,'' \textit{Sci. Data}, vol. 2, Art. no. 150066, 2015, doi: 10.1038/sdata.2015.66.
 \bibitem{munozsabater2021} J. Mu\~noz-Sabater \textit{et al.}, ``ERA5-Land: A state-of-the-art global reanalysis dataset for land applications,'' \textit{Earth Syst. Sci. Data}, vol. 13, no. 9, pp. 4349--4383, 2021, doi: 10.5194/essd-13-4349-2021.
 \bibitem{didan2020} K. Didan, ``MODIS/Terra vegetation indices 16-day L3 global 250 m SIN grid, version 061,'' NASA EOSDIS Land Processes DAAC, 2020, doi: 10.5067/MODIS/MOD13Q1.061.
-\bibitem{rbc2024} Rwanda Biomedical Centre, ``Malaria incidence and death rates among under five children (2014 to 2024) and pregnant women (2018 to 2023) in Rwanda,'' \textit{RBC Public Health Bulletin}, 2024. [Online]. Available: \url{https://rbc.gov.rw/publichealthbulletin/articles/read/173/}
 \bibitem{nisr2022} National Institute of Statistics of Rwanda, ``Fifth Population and Housing Census, 2022,'' NISR, Kigali, Rwanda, 2022. [Online]. Available: \url{https://statistics.gov.rw/}
+\bibitem{rbc2024} Rwanda Biomedical Centre, ``Malaria incidence and death rates among under five children (2014 to 2024) and pregnant women (2018 to 2023) in Rwanda,'' \textit{RBC Public Health Bulletin}, 2024. [Online]. Available: \url{https://rbc.gov.rw/publichealthbulletin/articles/read/173/}
 \bibitem{mohrwanda2019} Rwanda Ministry of Health, ``Rwanda registers declined malaria cases in 2018, WHO report,'' News, 2019. [Online]. Available: \url{https://www.moh.gov.rw/news-detail/rwanda-registers-declined-malaria-cases-in-2018-who-report}
 \bibitem{martineau2022} P. Martineau \textit{et al.}, ``Predicting malaria outbreaks from sea surface temperature variability up to nine months ahead in Limpopo, South Africa, using machine learning,'' \textit{Front. Public Health}, vol. 10, Art. no. 962377, 2022, doi: 10.3389/fpubh.2022.962377.
 \bibitem{nkiruka2021} O. Nkiruka, R. Prasad, and O. Clement, ``Prediction of malaria incidence using climate variability and machine learning,'' \textit{Informat. Med. Unlocked}, vol. 22, Art. no. 100508, 2021, doi: 10.1016/j.imu.2020.100508.

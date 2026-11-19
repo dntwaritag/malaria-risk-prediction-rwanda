@@ -254,9 +254,12 @@ class CollinearityScreen(BaseEstimator, TransformerMixin):
 
     Why this exists: the Phase 1 protocol fixes the rules before any data
     is seen. Step 1 flags pairs with |Pearson r| >= corr_threshold and
-    drops the member with the weaker absolute correlation to the target.
-    Step 2 repeatedly drops the feature with the largest VIF while that
-    VIF exceeds vif_threshold. Both steps are statistics, so they are
+    drops the member with the weaker association with the target. The default
+    association is mutual information (tie_break="mi"), which also credits
+    nonlinear environmental signals; tie_break="abs_r" is the earlier |Pearson r| rule.
+    Step 2 repeatedly drops a feature while any VIF exceeds vif_threshold: with
+    tie_break="mi" the least informative (lowest MI) feature among those over the
+    threshold, otherwise the feature with the largest VIF. Both steps are statistics, so they are
     learned in fit() on training data only, and transform() merely
     selects the surviving columns. The target must be passed to fit();
     it is used only to break ties between collinear features.
@@ -264,10 +267,13 @@ class CollinearityScreen(BaseEstimator, TransformerMixin):
     Expects a numeric, already imputed DataFrame (no NaN).
     """
 
-    def __init__(self, corr_threshold: float = 0.85, vif_threshold: float = 10.0, candidate_columns=None):
+    def __init__(self, corr_threshold: float = 0.85, vif_threshold: float = 10.0, candidate_columns=None,
+                 tie_break: str = "mi", n_mi_seeds: int = 10):
         self.corr_threshold = corr_threshold
         self.vif_threshold = vif_threshold
         self.candidate_columns = candidate_columns
+        self.tie_break = tie_break
+        self.n_mi_seeds = n_mi_seeds
 
     def fit(self, X: pd.DataFrame, y=None):
         from statsmodels.stats.outliers_influence import variance_inflation_factor
@@ -281,6 +287,14 @@ class CollinearityScreen(BaseEstimator, TransformerMixin):
         y = pd.Series(np.asarray(y, dtype=float), index=X.index)
         target_r = X.apply(lambda c: abs(np.corrcoef(c, y)[0, 1])
                            if c.std() > 0 else 0.0).fillna(0.0)
+        if self.tie_break == "mi":
+            from sklearn.feature_selection import mutual_info_classif
+            # one kNN MI estimate is noisy (sd about 0.0006, similar to the gaps between features), so average seeds
+            target_assoc = pd.Series(np.mean([mutual_info_classif(X.values, y.values.astype(int), random_state=s)
+                                              for s in range(self.n_mi_seeds)], axis=0), index=X.columns)
+            self.target_mi_ = target_assoc
+        else:
+            target_assoc = target_r
         self.dropped_: list[tuple[str, str]] = []
         keep = list(X.columns)
 
@@ -288,9 +302,9 @@ class CollinearityScreen(BaseEstimator, TransformerMixin):
         for i, a in enumerate(corr.columns):
             for b in corr.columns[i + 1:]:
                 if a in keep and b in keep and corr.loc[a, b] >= self.corr_threshold:
-                    loser = a if target_r[a] < target_r[b] else b
+                    loser = a if target_assoc[a] < target_assoc[b] else b
                     keep.remove(loser)
-                    self.dropped_.append((loser, f"|r|={corr.loc[a, b]:.2f} with partner"))
+                    self.dropped_.append((loser, f"|r|={corr.loc[a, b]:.2f} with partner, lower {self.tie_break} with target"))
 
         while len(keep) > 1:
             with warnings.catch_warnings():
@@ -302,6 +316,10 @@ class CollinearityScreen(BaseEstimator, TransformerMixin):
                 )
             worst = vifs.idxmax()
             if not np.isfinite(vifs[worst]) or vifs[worst] > self.vif_threshold:
+                if self.tie_break == "mi":
+                    # among the features over the threshold, drop the one least informative about the target
+                    over = [c for c in keep if not np.isfinite(vifs[c]) or vifs[c] > self.vif_threshold]
+                    worst = min(over, key=lambda c: target_assoc[c])
                 keep.remove(worst)
                 self.dropped_.append((worst, f"VIF={vifs[worst]:.1f}"))
             else:

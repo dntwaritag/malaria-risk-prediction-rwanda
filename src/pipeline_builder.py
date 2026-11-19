@@ -55,6 +55,24 @@ def split_train_test(data: pd.DataFrame, test_size: float = 0.2, seed: int = SEE
     return train, test
 
 
+def split_burden_tier(data: pd.DataFrame, test_size: float = 0.3, seed: int = SEED):
+    """Cluster grouped split stratified by positive-case burden tier (no seed search).
+
+    Clusters are labelled by how many positives they hold (0, 1-2, 3 or more) and the clusters, not the rows,
+    are split with that label as the stratum, so high-burden clusters appear in both parts in proportion. The seed is
+    fixed in advance and never tuned, which removes the split-selection optimism of picking a favourable seed.
+    """
+    from sklearn.model_selection import train_test_split
+    per = data.groupby("cluster")["y"].sum()
+    tier = pd.cut(per, bins=[-1, 0, 2, np.inf], labels=["0", "1-2", "3+"]).astype(str)
+    tr_c, te_c = train_test_split(per.index.values, test_size=test_size, stratify=tier.values, random_state=seed)
+    train = data[data["cluster"].isin(set(tr_c))].reset_index(drop=True)
+    test = data[data["cluster"].isin(set(te_c))].reset_index(drop=True)
+    train.attrs["split_seed"] = seed
+    train.attrs["strategy"] = "burden_tier_70_30"
+    return train, test
+
+
 def group_numeric_columns(X_train: pd.DataFrame, numeric_cols: list[str], threshold: float = SKEW_THRESHOLD) -> dict:
     """Assign each numeric column to a treatment using TRAINING skewness only.
 
@@ -111,7 +129,7 @@ def build_preprocessor(groups: dict, ordinal_cols: list[str], nominal_cols: list
 
 
 def numeric_columns(feature_columns: list[str]) -> list[str]:
-    return [c for c in feature_columns if c in D.CONTINUOUS_PERSON + D.DISCRETE_PERSON + D.climate_feature_columns() or c.startswith("cm_") or c.startswith("dyn_")]
+    return [c for c in feature_columns if c in D.CONTINUOUS_PERSON + D.DISCRETE_PERSON + D.climate_feature_columns() or c.startswith("cm_") or c.startswith("dyn_") or c == "survey_round"]
 
 
 def make_preprocessor_for(X_train: pd.DataFrame, feature_columns: list[str], scaler: str = "standard"):

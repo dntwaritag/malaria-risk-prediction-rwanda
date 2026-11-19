@@ -217,7 +217,7 @@ def run_diagnostics(train: pd.DataFrame, feature_columns: list[str], figures_dir
     # ---------------- Fig 3.3 feature to target importance
     Zf = Z.copy()
     discrete_mask = np.array([(c not in tnum) for c in Zf.columns])
-    mi = mutual_info_classif(Zf.values, y, discrete_features=discrete_mask, random_state=42)
+    mi = np.mean([mutual_info_classif(Zf.values, y, discrete_features=discrete_mask, random_state=sd) for sd in range(10)], axis=0)
     pb = np.array([abs(stats.pointbiserialr(y, Zf[c].values)[0]) if Zf[c].std() > 0 else 0.0 for c in Zf.columns])
     imp = pd.DataFrame({"feature": Zf.columns, "mi": mi, "abs_r": pb}).sort_values("mi", ascending=False)
     res["target_importance_top15"] = imp.head(15).round(5).to_dict("records")
@@ -296,7 +296,7 @@ def collinearity_report(train: pd.DataFrame, feature_columns: list[str], path="r
     dropped_names = [d[0] for d in scr.dropped_]
     kept = T[[c for c in T.columns if c not in dropped_names]]
     after = vifs(kept)
-    mi = dict(zip(T.columns, mutual_info_classif(T.values, y, random_state=42)))
+    mi = dict(zip(T.columns, np.mean([mutual_info_classif(T.values, y, random_state=s) for s in range(10)], axis=0)))
     spear = {c: float(stats.spearmanr(T[c], y)[0]) for c in T.columns}
     pear = {c: float(stats.pearsonr(T[c], y)[0]) for c in T.columns}
     inf = [c for c, v in before.items() if not np.isfinite(v)]
