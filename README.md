@@ -188,9 +188,3 @@ jupyter nbconvert --to notebook --execute --inplace notebooks/pipeline_execution
 ## 13. Data and license
 
 DHS microdata cannot be redistributed. Code is provided for research and public-health use.
-
-## 7. Combined-data improvement experiments (`src/improve.py`)
-
-All downloaded sources (CHIRPS, ERA5-Land dewpoint, MODIS, DHS covariates, interview-month temperature, spatial-neighbour burden) were
-tested with the same repeated cluster-grouped CV. None gave a reliable gain over household + cluster means (PR-AUC 0.0799);
-adding many climate features lowered it (0.018-0.066). See `reports/IMPROVEMENT_REPORT.md` and `reports/improvement_summary.json`.
