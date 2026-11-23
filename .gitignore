@@ -45,3 +45,10 @@ Thumbs.db
 # GPS-derived and downloaded external data (DHS terms: do not redistribute)
 data/external/*
 !data/external/.gitkeep
+
+# Deployable artefacts derived from DHS microdata: regenerate with `python -m src.train_final`
+models/
+app/cluster_scores.json
+
+# Deployment bundle (built for CloudShell upload)
+malaria-deploy.zip

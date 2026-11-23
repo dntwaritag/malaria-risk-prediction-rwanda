@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Rwanda malaria risk ranking service: Lambda container image (FastAPI via Lambda Web Adapter) behind an API Gateway HTTP API
+  with throttling. Two-stage deploy (ECR first, then the service), see deploy/README.md.
+
+Parameters:
+  ServiceName:
+    Type: String
+    Default: malaria-risk
+    AllowedPattern: "[a-z][a-z0-9-]{3,38}"
+  ImageTag:
+    Type: String
+    Default: latest
+  CreateService:
+    Type: String
+    Default: "false"
+    AllowedValues: ["false", "true"]
+    Description: Stage 1 creates only the ECR repository. Stage 2 (after pushing the image) creates the service.
+  MemorySize:
+    Type: Number
+    Default: 1024
+    AllowedValues: [512, 1024, 2048]
+  RateLimit:
+    Type: Number
+    Default: 10
+    Description: Sustained requests per second allowed through the API (protects cost).
+  BurstLimit:
+    Type: Number
+    Default: 20
+
+Conditions:
+  MakeService: !Equals [!Ref CreateService, "true"]
+
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ServiceName
+      EmptyOnDelete: true
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"keep last 5 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":5},"action":{"type":"expire"}}]}'
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: MakeService
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ServiceName}"
+      RetentionInDays: 30
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: MakeService
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  Function:
+    Type: AWS::Lambda::Function
+    Condition: MakeService
+    DependsOn: LogGroup
+    Properties:
+      FunctionName: !Ref ServiceName
+      PackageType: Image
+      Code:
+        ImageUri: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repository}:${ImageTag}"
+      Architectures: [x86_64]
+      MemorySize: !Ref MemorySize
+      Timeout: 30
+      Role: !GetAtt ExecutionRole.Arn
+      Tags:
+        - { Key: project, Value: malaria-risk-rwanda }
+
+  Api:
+    Type: AWS::ApiGatewayV2::Api
+    Condition: MakeService
+    Properties:
+      Name: !Ref ServiceName
+      ProtocolType: HTTP
+
+  Integration:
+    Type: AWS::ApiGatewayV2::Integration
+    Condition: MakeService
+    Properties:
+      ApiId: !Ref Api
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt Function.Arn
+      PayloadFormatVersion: "2.0"
+
+  Route:
+    Type: AWS::ApiGatewayV2::Route
+    Condition: MakeService
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: "$default"
+      Target: !Sub "integrations/${Integration}"
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Condition: MakeService
+    Properties:
+      ApiId: !Ref Api
+      StageName: "$default"
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref RateLimit
+        ThrottlingBurstLimit: !Ref BurstLimit
+
+  InvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: MakeService
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref Function
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*"
+
+Outputs:
+  RepositoryUri:
+    Value: !GetAtt Repository.RepositoryUri
+  ServiceUrl:
+    Condition: MakeService
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com"

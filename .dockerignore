@@ -1,0 +1,17 @@
+.git
+.github
+data
+docs
+figures
+notebooks
+reports
+old_results
+tests
+deploy
+*.log
+*.md
+__pycache__
+*.pyc
+.venv
+venv
+.env

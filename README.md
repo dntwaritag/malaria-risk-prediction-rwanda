@@ -188,3 +188,16 @@ jupyter nbconvert --to notebook --execute --inplace notebooks/pipeline_execution
 ## 13. Data and license
 
 DHS microdata cannot be redistributed. Code is provided for research and public-health use.
+
+## 14. Web app, API and AWS deployment
+
+`app/` is a FastAPI service with a one-page web UI and a JSON API (`/api/model`, `/api/clusters`, `/api/score`, `/api/score/csv`, `/health`, `/docs`).
+It ships only the trained logistic model, its model card and out-of-fold cluster scores: no DHS person-level data, no coordinates.
+
+```bash
+python -m src.train_final                 # creates models/ and app/cluster_scores.json (git-ignored)
+python -m pytest -q                       # tests use synthetic data only
+uvicorn app.main:app --port 8080          # run locally, then open http://localhost:8080
+```
+
+AWS deployment (Lambda container image + API Gateway via CloudFormation, with teardown, cost and security notes): see `deploy/README.md`.

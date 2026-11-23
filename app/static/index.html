@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rwanda malaria risk ranking</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <p class="eyebrow">Carnegie Mellon University Africa &middot; MS Engineering AI</p>
+    <h1>Predicting malaria risk for targeted prevention in Rwanda</h1>
+    <p class="lead">A simple model that ranks survey clusters by relative malaria risk, built from the DHS Malaria Indicator Survey 2023.</p>
+  </div>
+</header>
+<main class="wrap">
+  <section id="summary" aria-live="polite">
+    <div class="stat"><span id="s-pr">-</span><small>PR-AUC (chance <b id="s-base">-</b>)</small></div>
+    <div class="stat"><span id="s-roc">-</span><small>ROC-AUC</small></div>
+    <div class="stat"><span id="s-lift">-</span><small>Top-20% lift</small></div>
+    <div class="stat"><span id="s-n">-</span><small>People &middot; <b id="s-pos">-</b> positive</small></div>
+  </section>
+
+  <section>
+    <h2>Cluster risk ranking</h2>
+    <p class="muted">Out-of-fold model score for each survey cluster. <b>Scores are for ranking only: a score of 0.8 is not an 80% chance of malaria.</b></p>
+    <div class="controls">
+      <label for="tier">Show</label>
+      <select id="tier"><option value="">All clusters</option><option>Highest</option><option>High</option><option>Medium</option><option>Lower</option></select>
+    </div>
+    <div id="chart" role="img" aria-label="Bar chart of cluster risk scores, highest first"></div>
+    <div class="tablewrap"><table id="clusters"><thead><tr><th>Rank</th><th>Cluster</th><th>Model score</th><th>Tier</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>Score your own data</h2>
+    <p class="muted">Upload a CSV of DHS-coded household records (<a href="/api/template.csv">download header</a>). Include a <code>cluster</code> column to group records. Files are scored in memory and not stored.</p>
+    <input type="file" id="file" accept=".csv,text/csv">
+    <button id="go" type="button">Score file</button>
+    <p id="msg" class="muted" role="status"></p>
+    <div class="tablewrap"><table id="results" hidden><thead><tr><th>Rank</th><th>Cluster</th><th>Records</th><th>Mean model score</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>About the model</h2>
+    <p id="about" class="muted"></p>
+    <h3>Limits</h3>
+    <ul id="limits"></ul>
+    <p class="muted">API documentation: <a href="/docs">/docs</a></p>
+  </section>
+</main>
+<footer><div class="wrap">Data: DHS Rwanda MIS 2023. Individual-level data and coordinates are not included in this service. Decision support only.</div></footer>
+<script src="/static/app.js"></script>
+</body>
+</html>
